@@ -160,6 +160,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
     };
   
     return (
+    <>
       <div className="mb-3">
         <h5>Asignar tokens a votante</h5>
         <div className="d-flex mb-2">
@@ -216,6 +217,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         </div>
         {groupStatus && <div className="text-info">{groupStatus}</div>}
       </div>
+    </>
     );
   };
   
