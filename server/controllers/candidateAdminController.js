@@ -241,57 +241,108 @@ const updateCandidate = async (req, res, next) => {
       isActive
     } = req.body;
 
-    // Verificar candidato existente
-    const candidate = await Candidate.findById(req.params.id);
-    if (!candidate) {
+    const candidateToUpdate = await Candidate.findById(req.params.id).populate('election'); // Populate election details
+    if (!candidateToUpdate) {
       return next(new AppError('Candidato no encontrado', 404));
     }
 
-    // Verificar si la categoría existe (si se proporciona)
-    if (categoryId && categoryId !== candidate.category?.toString()) {
-      const category = await ElectoralCategory.findById(categoryId);
-      if (!category) {
-        return next(new AppError('La categoría electoral especificada no existe', 404));
+    // Check if the election is active
+    if (candidateToUpdate.election) {
+      const election = candidateToUpdate.election; // Already populated
+      const now = new Date();
+      // Ensure election.startDate and election.endDate are Date objects for comparison
+      const startDate = new Date(election.startDate);
+      const endDate = new Date(election.endDate);
+
+      if (startDate <= now && now <= endDate) {
+        // If election is active, only allow 'isActive' and 'contactInfo' fields to be changed.
+        let allowedUpdate = true;
+        const forbiddenFields = [
+          'firstName', 'lastName', 'party', 'biography', 'manifesto',
+          'categoryId', 'position', 'walletAddress', 'electionId' // electionId shouldn't change anyway
+        ];
+
+        if (req.file) { // Photo update is forbidden during active election
+            allowedUpdate = false;
+        } else {
+            for (const key in req.body) {
+                if (forbiddenFields.includes(key)) {
+                    // Check if the value is actually different or being set for the first time
+                    // A simple check: if the key is in req.body and is a forbidden field, assume change intent.
+                    // For a more precise check, compare req.body[key] with candidateToUpdate[key]
+                    // However, undefined in req.body means "no change intent" for that field.
+                    if (req.body[key] !== undefined) {
+                        // A more robust check would involve deep comparison if fields are objects/arrays
+                        // For now, if a forbidden field exists in req.body, we check if it differs from original
+                        if (JSON.stringify(candidateToUpdate[key]) !== JSON.stringify(req.body[key])) {
+                             // Special handling for categoryId as it's an ObjectId
+                            if (key === 'categoryId' && candidateToUpdate.category?.toString() === req.body[key]) {
+                                // This is not a change
+                            } else if (key !== 'categoryId') {
+                                allowedUpdate = false;
+                                break;
+                            } else if (key === 'categoryId' && candidateToUpdate.category?.toString() !== req.body[key]) {
+                                allowedUpdate = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!allowedUpdate) {
+             return next(new AppError('No se puede editar el candidato mientras la elección está activa. Solo se permite cambiar el estado (activo/inactivo) y la información de contacto.', 403));
+        }
       }
     }
 
     // Capturar estado antes del cambio para el registro de actividad
-    const previousState = candidate.toObject();
+    const previousState = candidateToUpdate.toObject();
 
-    // Actualizar datos básicos
-    if (firstName) candidate.firstName = firstName;
-    if (lastName) candidate.lastName = lastName;
-    if (party) candidate.party = party;
-    if (biography !== undefined) candidate.biography = biography;
-    if (manifesto !== undefined) candidate.manifesto = manifesto;
-    if (categoryId) candidate.category = categoryId;
-    if (position !== undefined) candidate.position = position;
-    if (walletAddress) candidate.walletAddress = walletAddress;
-    if (isActive !== undefined) candidate.isActive = isActive;
+    // Actualizar datos básicos (some are conditional based on active election)
+    if (firstName) candidateToUpdate.firstName = firstName;
+    if (lastName) candidateToUpdate.lastName = lastName;
+    if (party) candidateToUpdate.party = party;
+    if (biography !== undefined) candidateToUpdate.biography = biography;
+    if (manifesto !== undefined) candidateToUpdate.manifesto = manifesto;
+    if (categoryId) {
+        // Ensure category exists if it's being changed
+        if (categoryId !== candidateToUpdate.category?.toString()) {
+            const category = await ElectoralCategory.findById(categoryId);
+            if (!category) {
+                return next(new AppError('La categoría electoral especificada no existe', 404));
+            }
+            candidateToUpdate.category = categoryId;
+        }
+    }
+    if (position !== undefined) candidateToUpdate.position = position;
+    if (walletAddress) candidateToUpdate.walletAddress = walletAddress;
 
-    // Actualizar información de contacto
+    // isActive is always allowed to be updated
+    if (isActive !== undefined) candidateToUpdate.isActive = isActive;
+
+    // Actualizar información de contacto (always allowed)
     if (email || phone) {
-      candidate.contactInfo = {
-        ...candidate.contactInfo,
-        email: email || candidate.contactInfo?.email,
-        phone: phone || candidate.contactInfo?.phone
+      candidateToUpdate.contactInfo = {
+        ...(candidateToUpdate.contactInfo || {}), // Ensure contactInfo exists
+        email: email !== undefined ? email : candidateToUpdate.contactInfo?.email,
+        phone: phone !== undefined ? phone : candidateToUpdate.contactInfo?.phone
       };
     }
 
-    // Si hay una nueva foto del candidato, procesarla
+    // Si hay una nueva foto del candidato, procesarla (already checked if allowed)
     if (req.file) {
       const uploadDir = path.join(__dirname, '../../uploads/candidates');
       
-      // Asegurar que el directorio existe
       try {
         await fs.mkdir(uploadDir, { recursive: true });
       } catch (error) {
         console.error('Error al crear directorio de fotos:', error);
       }
       
-      // Eliminar foto anterior si existe
-      if (candidate.photoUrl) {
-        const oldPhotoPath = path.join(__dirname, '../..', candidate.photoUrl);
+      if (candidateToUpdate.photoUrl) {
+        const oldPhotoPath = path.join(__dirname, '../..', candidateToUpdate.photoUrl);
         try {
           await fs.unlink(oldPhotoPath);
         } catch (error) {
@@ -299,19 +350,17 @@ const updateCandidate = async (req, res, next) => {
         }
       }
       
-      // Guardar nueva foto
       const fileExtension = path.extname(req.file.originalname);
-      const photoFilename = `candidate-${candidate._id}${fileExtension}`;
+      const photoFilename = `candidate-${candidateToUpdate._id}${fileExtension}`;
       const photoPath = path.join(uploadDir, photoFilename);
       
       await fs.writeFile(photoPath, req.file.buffer);
       
-      // Actualizar candidato con la URL de la foto
-      candidate.photoUrl = `/uploads/candidates/${photoFilename}`;
+      candidateToUpdate.photoUrl = `/uploads/candidates/${photoFilename}`;
     }
 
     // Guardar cambios
-    const updatedCandidate = await candidate.save();
+    const updatedCandidate = await candidateToUpdate.save();
 
     // Registrar actividad
     await ActivityLog.logActivity({
@@ -349,18 +398,26 @@ const updateCandidate = async (req, res, next) => {
  */
 const deleteCandidate = async (req, res, next) => {
   try {
-    // Verificar candidato existente
-    const candidate = await Candidate.findById(req.params.id);
-    if (!candidate) {
+    const candidateToDelete = await Candidate.findById(req.params.id).populate('election'); // Populate election
+    if (!candidateToDelete) {
       return next(new AppError('Candidato no encontrado', 404));
     }
 
-    // Obtener datos de la elección para el registro de actividad
-    const election = await Election.findById(candidate.election);
+    // Check if the election is active
+    if (candidateToDelete.election) {
+      const election = candidateToDelete.election; // Already populated
+      const now = new Date();
+      const startDate = new Date(election.startDate);
+      const endDate = new Date(election.endDate);
+
+      if (startDate <= now && now <= endDate) {
+        return next(new AppError('No se puede eliminar el candidato mientras la elección está activa.', 403));
+      }
+    }
 
     // Eliminar foto si existe
-    if (candidate.photoUrl) {
-      const photoPath = path.join(__dirname, '../..', candidate.photoUrl);
+    if (candidateToDelete.photoUrl) {
+      const photoPath = path.join(__dirname, '../..', candidateToDelete.photoUrl);
       try {
         await fs.unlink(photoPath);
       } catch (error) {
@@ -368,10 +425,7 @@ const deleteCandidate = async (req, res, next) => {
       }
     }
 
-    // Eliminar candidato
-    await candidate.remove();
-
-    // Registrar actividad
+    // Registrar actividad (antes de eliminar para tener acceso a los datos)
     await ActivityLog.logActivity({
       user: {
         id: req.user._id,
@@ -383,16 +437,19 @@ const deleteCandidate = async (req, res, next) => {
       resource: {
         type: 'Candidate',
         id: req.params.id,
-        name: `${candidate.firstName} ${candidate.lastName}`
+        name: `${candidateToDelete.firstName} ${candidateToDelete.lastName}`
       },
       details: {
-        election: election ? {
-          id: election._id,
-          title: election.title
+        election: candidateToDelete.election ? { // Use populated election data
+          id: candidateToDelete.election._id,
+          title: candidateToDelete.election.title
         } : null,
-        party: candidate.party
+        party: candidateToDelete.party
       }
     });
+
+    // Eliminar candidato
+    await candidateToDelete.remove();
 
     res.status(200).json({
       success: true,
@@ -555,6 +612,65 @@ const getCandidatesByElection = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Actualizar el estado (activo/inactivo) de un candidato
+ * @route   PATCH /api/admin/candidates/:id/status
+ * @access  Privado (Admin)
+ */
+const updateCandidateStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return next(new AppError('El campo isActive es requerido y debe ser un booleano', 400));
+    }
+
+    const candidate = await Candidate.findById(id);
+
+    if (!candidate) {
+      return next(new AppError('Candidato no encontrado', 404));
+    }
+
+    // Capture previous state for logging
+    const previousState = candidate.toObject();
+
+    candidate.isActive = isActive;
+    await candidate.save();
+
+    // Registrar actividad
+    await ActivityLog.logActivity({
+      user: { // Assuming req.user is populated by adminAuth middleware
+        id: req.user._id, // Use req.user.id if that's what adminAuth provides
+        model: 'Admin',
+        username: req.user.username,
+        name: req.user.name || req.user.username
+      },
+      action: 'candidate_status_update',
+      resource: {
+        type: 'Candidate',
+        id: candidate._id,
+        name: `${candidate.firstName} ${candidate.lastName}`
+      },
+      changes: {
+        before: { isActive: previousState.isActive },
+        after: { isActive: candidate.isActive }
+      },
+      details: {
+        newStatus: candidate.isActive ? 'Activo' : 'Inactivo'
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: candidate,
+      message: 'Estado del candidato actualizado correctamente'
+    });
+  } catch (error) {
+    next(new AppError(`Error al actualizar estado del candidato: ${error.message}`, 500));
+  }
+};
+
 module.exports = {
   createCandidate,
   getCandidates,
@@ -562,5 +678,6 @@ module.exports = {
   updateCandidate,
   deleteCandidate,
   reorderCandidates,
-  getCandidatesByElection
+  getCandidatesByElection,
+  updateCandidateStatus
 };

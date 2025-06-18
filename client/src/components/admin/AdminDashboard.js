@@ -22,6 +22,7 @@ import { toast } from "react-toastify";
 import StatsDashboard from "./stats/StatsDashboard";
 import axios from "axios";
 import AssignTokens from './AssignTokens';
+import ManageCandidates from './ManageCandidates';
 
 // Helper function for translations
 function accionEnEspanol(action) {
@@ -306,6 +307,13 @@ const AdminDashboard = () => {
               })}
             </tbody>
           </Table>
+        </Tab>
+        <Tab eventKey="candidates" title="Gestionar Candidatos">
+          <ManageCandidates
+            isElectionActive={isElectionActive}
+            hasElectionEnded={hasElectionEnded}
+            allElections={elections}
+          />
         </Tab>
         <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
         <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>

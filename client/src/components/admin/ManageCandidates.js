@@ -3,7 +3,7 @@ import { Container, Card, Table, Form, Button, Alert, Spinner, InputGroup, Modal
 import { toast } from 'react-toastify';
 import AdminContext from '../../context/AdminContext';
 
-const ManageCandidates = () => {
+const ManageCandidates = ({ isElectionActive, hasElectionEnded, allElections }) => {
   const { isAdminAuthenticated, adminPermissions, adminLoading } = useContext(AdminContext);
 
   const [elections, setElections] = useState([]);
@@ -24,6 +24,8 @@ const ManageCandidates = () => {
     imageUrl: ''
   });
   const [imagePreview, setImagePreview] = useState('');
+  const [currentElectionIsActive, setCurrentElectionIsActive] = useState(false);
+  const [statusToggleLoading, setStatusToggleLoading] = useState({}); // To track loading per candidate
 
   // Solo carga datos si eres admin y estás autenticado
   useEffect(() => {
@@ -43,6 +45,46 @@ const ManageCandidates = () => {
   useEffect(() => {
     setImagePreview(newCandidate.imageUrl);
   }, [newCandidate.imageUrl]);
+
+  useEffect(() => {
+    if (selectedElection && allElections && typeof isElectionActive === 'function') {
+      const currentFullElection = allElections.find(e => e._id === selectedElection);
+      setCurrentElectionIsActive(currentFullElection ? isElectionActive(currentFullElection) : false);
+    } else {
+      setCurrentElectionIsActive(false);
+    }
+  }, [selectedElection, allElections, isElectionActive]);
+
+  const handleToggleActiveStatus = async (candidateId, currentStatus) => {
+    setStatusToggleLoading(prev => ({ ...prev, [candidateId]: true }));
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateId}/status`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': token,
+          },
+          body: JSON.stringify({ isActive: !currentStatus }),
+        }
+      );
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Error al cambiar el estado del candidato');
+      }
+      toast.success(`Candidato ${!currentStatus ? 'activado' : 'desactivado'} correctamente`);
+      // Refresh candidates for the selected election to show the updated status
+      if (selectedElection) {
+        fetchCandidates(selectedElection);
+      }
+    } catch (err) {
+      toast.error(err.message || 'No se pudo cambiar el estado del candidato');
+    } finally {
+      setStatusToggleLoading(prev => ({ ...prev, [candidateId]: false }));
+    }
+  };
 
   const fetchElections = async () => {
     try {
@@ -237,13 +279,14 @@ const ManageCandidates = () => {
                   <th>Nombre</th>
                   <th>Partido</th>
                   <th>Wallet</th>
+                  <th>Estado</th> {/* New Column */}
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-3">
+                    <td colSpan={7} className="text-center py-3"> {/* Adjusted colSpan */}
                       No hay candidatos registrados
                     </td>
                   </tr>
@@ -275,10 +318,25 @@ const ManageCandidates = () => {
                         </Button>
                       </td>
                       <td>
+                        {candidate.isActive ?
+                          <Badge bg="success">Activo</Badge> :
+                          <Badge bg="secondary">Inactivo</Badge>}
+                      </td>
+                      <td>
+                        <Button
+                          variant={candidate.isActive ? "warning" : "success"}
+                          size="sm"
+                          className="me-2"
+                          onClick={() => handleToggleActiveStatus(candidate._id, candidate.isActive)}
+                          disabled={statusToggleLoading[candidate._id] || actionLoading || currentElectionIsActive}
+                        >
+                          {statusToggleLoading[candidate._id] ? <Spinner as="span" animation="border" size="sm" /> : (candidate.isActive ? <i className="fas fa-times-circle"></i> : <i className="fas fa-check-circle"></i>)}
+                        </Button>
                         <Button
                           variant="outline-danger"
                           size="sm"
                           onClick={() => openRemoveModal(candidate)}
+                          disabled={currentElectionIsActive || actionLoading || statusToggleLoading[candidate._id]}
                         >
                           <i className="fas fa-trash-alt"></i>
                         </Button>
