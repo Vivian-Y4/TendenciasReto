@@ -1,0 +1,15 @@
+{
+   "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_votingTokenAddress",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    }
+  ]
+}

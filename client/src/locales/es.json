@@ -1,0 +1,401 @@
+{
+  "app": {
+    "title": "Plataforma de Votación Blockchain",
+    "description": "Un sistema de votación electrónica seguro, transparente y descentralizado construido con tecnología blockchain."
+  },
+  "navbar": {
+    "home": "Inicio",
+    "elections": "Elecciones",
+    "about": "Acerca de",
+    "help": "Ayuda",
+    "admin": "Panel de Administración",
+    "wallet": "Billetera",
+    "connect": "Conectar Billetera",
+    "logout": "Cerrar Sesión"
+  },
+  "home": {
+    "title": "Plataforma Segura de Votación Blockchain",
+    "subtitle": "Un sistema de votación electrónica transparente, seguro y descentralizado construido con tecnología blockchain.",
+    "connect_button": "Conecta tu Billetera para Comenzar",
+    "features": {
+      "auth_title": "Autenticación Segura",
+      "auth_text": "Conéctate de forma segura con tu billetera blockchain. Tu identidad se verifica mediante prueba criptográfica, asegurando que solo votantes elegibles puedan participar en las elecciones.",
+      "voting_title": "Votación Transparente",
+      "voting_text": "Todos los votos se registran en la blockchain, creando un registro inmutable que no puede ser alterado. Cada voto se cuenta con precisión y se preserva la integridad de la elección.",
+      "privacy_title": "Papeletas Anónimas",
+      "privacy_text": "Tu voto permanece anónimo. Aunque la blockchain registra que has votado, no revela tus elecciones específicas, protegiendo tu privacidad."
+    },
+    "participate": {
+      "title": "Participa en Elecciones",
+      "text": "Explora elecciones actuales y próximas, revisa información de candidatos y emite tu voto de forma segura usando tecnología blockchain.",
+      "button": "Ver Elecciones"
+    },
+    "admin_section": {
+      "title": "Gestionar Elecciones",
+      "text": "Crea nuevas elecciones, gestiona candidatos, monitorea la actividad de votación y finaliza los resultados de las elecciones.",
+      "button": "Panel de Administración"
+    },
+    "results_section": {
+      "title": "Resultados de Elecciones",
+      "text": "Visualiza resultados verificados de elecciones que están criptográficamente asegurados por la blockchain.",
+      "button": "Ver Resultados"
+    },
+    "how_it_works": {
+      "title": "Cómo Funciona",
+      "step1_title": "Conecta tu Billetera",
+      "step1_text": "Autentícate con tu billetera blockchain",
+      "step2_title": "Regístrate",
+      "step2_text": "Verifica tu elegibilidad para votar",
+      "step3_title": "Emite tu Voto",
+      "step3_text": "Selecciona tu candidato y firma la transacción",
+      "step4_title": "Verifica",
+      "step4_text": "Confirma tu voto en la blockchain"
+    }
+  },
+  "elections": {
+    "title": "Elecciones Disponibles",
+    "no_elections": "Actualmente no hay elecciones para mostrar.",
+    "details_button": "Ver Detalles",
+    "status": {
+      "active": "Activa",
+      "ended": "Finalizada",
+      "upcoming": "Próxima"
+    },
+    "fields": {
+      "start": "Inicio",
+      "end": "Fin",
+      "candidates": "Candidatos",
+      "total_votes": "Votos Totales"
+    }
+  },
+  "election_details": {
+    "back_button": "Volver a Elecciones",
+    "candidates": "Candidatos",
+    "no_candidates": "No hay candidatos disponibles para esta elección.",
+    "actions": "Acciones",
+    "status": {
+      "not_registered": "No estás registrado para esta elección. Por favor, contacta al administrador de la elección.",
+      "already_voted": "Ya has emitido tu voto en esta elección.",
+      "eligible": "Eres elegible para votar en esta elección.",
+      "not_started": "Esta elección aún no ha comenzado. La votación comienza el",
+      "ended": "Esta elección ha finalizado y ya no acepta votos."
+    },
+    "buttons": {
+      "cast_vote": "Emitir tu Voto",
+      "view_results": "Ver Resultados"
+    },
+    "info": {
+      "title": "Información de la Elección",
+      "results_finalized": "Resultados Finalizados",
+      "candidate_count": "Número de Candidatos",
+      "total_votes": "Votos Totales"
+    }
+  },
+  "voting": {
+    "title": "Emitir tu Voto",
+    "select_candidate": "Seleccionar un Candidato",
+    "submit_vote": "Enviar Voto",
+    "cancel": "Cancelar",
+    "processing": "Procesando...",
+    "confirm_title": "Confirmar tu Voto",
+    "confirm_prompt": "Estás a punto de votar por:",
+    "confirm_warning": "Esta acción no se puede deshacer una vez confirmada en la blockchain.",
+    "confirm_button": "Confirmar Voto",
+    "info": {
+      "title": "Información de Votación",
+      "blockchain_info": "Tu voto será registrado de forma segura en la blockchain. Esto requiere una pequeña comisión de transacción.",
+      "how_title": "Cómo Funciona la Votación:",
+      "how_step1": "Selecciona tu candidato preferido",
+      "how_step2": "Confirma tu selección",
+      "how_step3": "Firma la transacción con tu billetera",
+      "how_step4": "Espera la confirmación en la blockchain",
+      "notes_title": "Notas Importantes:",
+      "notes_item1": "Tu voto es anónimo",
+      "notes_item2": "Solo puedes votar una vez",
+      "notes_item3": "Los votos no pueden cambiarse después de enviarse",
+      "notes_item4": "Necesitas suficiente ETH en tu billetera para las comisiones de gas"
+    }
+  },
+  "results": {
+    "title": "Resultados de la Elección",
+    "distribution": "Distribución de Votos",
+    "comparison": "Comparación de Votos",
+    "detailed_results": "Resultados Detallados",
+    "blockchain_verification": "Sobre la Verificación Blockchain",
+    "verification_text": "Todos los resultados de votación se almacenan de forma inmutable en la blockchain y pueden ser verificados independientemente. La integridad de estos resultados está garantizada por prueba criptográfica.",
+    "last_updated": "Resultados actualizados por última vez",
+    "verify_button": "Verificar en Blockchain",
+    "table": {
+      "rank": "Posición",
+      "candidate": "Candidato",
+      "description": "Descripción",
+      "votes": "Votos",
+      "percentage": "Porcentaje"
+    },
+    "not_available": "Los resultados para esta elección aún no están disponibles. Los resultados se publicarán después de que finalice la elección."
+  },
+  "admin": {
+    "title": "Panel de Administración",
+    "create_button": "Crear Nueva Elección",
+    "stats": {
+      "total_elections": "Total de Elecciones",
+      "registered_voters": "Votantes Registrados",
+      "total_votes": "Total de Votos Emitidos"
+    },
+    "tabs": {
+      "all": "Todas las Elecciones",
+      "active": "Elecciones Activas",
+      "ended": "Elecciones Finalizadas"
+    },
+    "no_elections": "No se encontraron elecciones. Crea una nueva elección para comenzar.",
+    "no_active": "No se encontraron elecciones activas.",
+    "no_ended": "No se encontraron elecciones finalizadas.",
+    "table": {
+      "id": "ID",
+      "title": "Título",
+      "start_time": "Hora de Inicio",
+      "end_time": "Hora de Fin",
+      "status": "Estado",
+      "votes": "Votos",
+      "actions": "Acciones",
+      "finalized": "Finalizada",
+      "total_votes": "Votos Totales"
+    },
+    "actions": {
+      "view": "Ver",
+      "end": "Finalizar",
+      "finalize": "Finalizar Resultados",
+      "results": "Resultados",
+      "edit": "Editar",
+      "manage_voters": "Gestionar Votantes",
+      "statistics": "Estadísticas"
+    },
+    "activity": {
+      "title": "Actividad Reciente",
+      "created": "Elección creada",
+      "registered": "Votantes registrados",
+      "voted": "Voto registrado",
+      "ended": "Elección finalizada",
+      "finalized": "Resultados finalizados"
+    },
+    "edit": {
+      "title": "Editar Elección",
+      "loading_election": "Cargando detalles de la elección...",
+      "current_start": "Hora de Inicio Actual",
+      "current_end": "Hora de Fin Actual",
+      "time_note": "Los campos de tiempo no pueden modificarse una vez creada la elección. Para cambiar los tiempos, por favor crea una nueva elección.",
+      "updating": "Actualizando Elección...",
+      "update_button": "Actualizar Elección",
+      "update_success": "Elección actualizada con éxito",
+      "update_error": "Error al actualizar la elección",
+      "update_failed": "Fallo al actualizar la elección",
+      "already_started": "Esta elección ya ha comenzado y no puede ser editada."
+    },
+    "voters": {
+      "title": "Gestionar Votantes",
+      "loading": "Cargando votantes...",
+      "registered_count": "{{count}} votantes registrados",
+      "search_placeholder": "Buscar por dirección...",
+      "add_voter": "Añadir Votante",
+      "bulk_add": "Añadir Varios",
+      "address": "Dirección de Billetera",
+      "registration_date": "Fecha de Registro",
+      "status": "Estado",
+      "actions": "Acciones",
+      "no_voters": "No hay votantes registrados para esta elección.",
+      "no_results": "No se encontraron votantes que coincidan con tu búsqueda.",
+      "has_voted": "Ha Votado",
+      "not_voted": "No Ha Votado",
+      "showing_filtered": "Mostrando {{count}} de {{total}} votantes",
+      "showing_all": "Mostrando todos los {{count}} votantes",
+      "clear_search": "Limpiar Búsqueda",
+      "enter_address": "Introduce la Dirección Ethereum",
+      "address_format": "Debe ser una dirección Ethereum válida (0x...)",
+      "add": "Añadir Votante",
+      "add_success": "Votante añadido con éxito",
+      "add_error": "Error al añadir votante",
+      "invalid_address": "Dirección Ethereum inválida",
+      "enter_addresses": "Introduce Direcciones Ethereum (una por línea o separadas por comas)",
+      "addresses_format": "Cada dirección debe ser una dirección Ethereum válida (0x...)",
+      "add_multiple": "Añadir Votantes",
+      "bulk_add_success": "Se agregaron con éxito {{count}} votantes",
+      "bulk_add_error": "Error al añadir votantes en masa",
+      "some_invalid_addresses": "Algunas direcciones no son válidas. Por favor, verifica e intenta de nuevo.",
+      "no_addresses": "No se encontraron direcciones válidas",
+      "remove_voter": "Eliminar Votante",
+      "remove_confirm": "¿Estás seguro de que quieres eliminar este votante?",
+      "remove_warning": "Esta acción no se puede deshacer. Los votantes eliminados ya no podrán participar en esta elección.",
+      "remove": "Eliminar",
+      "remove_success": "Votante eliminado con éxito",
+      "remove_error": "Error al eliminar votante",
+      "election_fetch_error": "Error al obtener detalles de la elección",
+      "voters_fetch_error": "Error al obtener votantes",
+      "fetch_error": "Error al cargar datos de votantes",
+      "cannot_modify": "Los votantes no pueden ser modificados una vez que ha comenzado una elección."
+    },
+    "stats": {
+      "title": "Estadísticas de la Elección",
+      "loading": "Cargando estadísticas...",
+      "download_report": "Descargar Informe",
+      "no_stats_available": "Aún no hay estadísticas disponibles para esta elección.",
+      "registered_voters": "Votantes Registrados",
+      "votes_cast": "Votos Emitidos",
+      "participation_rate": "Tasa de Participación",
+      "candidates": "Candidatos",
+      "voting_results": "Resultados de Votación",
+      "voter_participation": "Participación de Votantes",
+      "voting_timeline": "Cronología de Votación",
+      "candidate_votes": "Distribución de Votos por Candidato",
+      "participation": "Resumen de Participación",
+      "voting_activity": "Actividad de Votación a lo Largo del Tiempo",
+      "participation_summary": "Resumen de Participación",
+      "registered": "Registrados",
+      "voted": "Votaron",
+      "not_voted": "No Votaron",
+      "votes": "Votos",
+      "votes_count": "Número de Votos",
+      "percentage": "Porcentaje",
+      "candidate": "Candidato",
+      "votes_over_time": "Distribución de votos durante el período de elección",
+      "number_of_votes": "Número de Votos",
+      "time_period": "Período de Tiempo",
+      "election_fetch_error": "Error al obtener detalles de la elección",
+      "stats_fetch_error": "Error al obtener estadísticas",
+      "fetch_error": "Error al cargar datos de estadísticas"
+    }
+  },
+  "create_election": {
+    "title": "Crear Nueva Elección",
+    "details_section": "Detalles de la Elección",
+    "fields": {
+      "title": "Título de la Elección",
+      "title_placeholder": "Introduce un título para la elección",
+      "description": "Descripción de la Elección",
+      "description_placeholder": "Proporciona una descripción detallada de la elección",
+      "start_date": "Fecha de Inicio",
+      "start_time": "Hora de Inicio",
+      "end_date": "Fecha de Fin",
+      "end_time": "Hora de Fin"
+    },
+    "candidates_section": "Candidatos",
+    "add_candidate": "Añadir Candidato",
+    "candidate": {
+      "title": "Candidato #",
+      "name": "Nombre",
+      "name_placeholder": "Introduce el nombre del candidato",
+      "description": "Descripción",
+      "description_placeholder": "Introduce la descripción o plataforma del candidato"
+    },
+    "buttons": {
+      "create": "Crear Elección",
+      "creating": "Creando Elección...",
+      "cancel": "Cancelar"
+    }
+  },
+  "auth": {
+    "connect_wallet": "Conecta tu Billetera",
+    "connect_prompt": "Conecta tu billetera blockchain para autenticarte y participar en elecciones.",
+    "connect_button": "Conectar con MetaMask",
+    "connecting": "Conectando...",
+    "why_connect": "¿Por qué Conectar una Billetera?",
+    "why_text": "Tu billetera proporciona una forma segura de autenticarte y firmar transacciones en la blockchain. Esto asegura la integridad de tu voto y previene el fraude.",
+    "no_wallet": "¿No tienes una billetera?",
+    "install_metamask": "Instalar MetaMask",
+    "auto_connected": "Billetera conectada automáticamente",
+    "checking_wallet": "Verificando conexión de billetera...",
+    "connection_failed": "Error al conectar billetera",
+    "connection_success": "¡Billetera conectada con éxito!",
+    "generic_error": "Ocurrió un error. Por favor, inténtalo de nuevo.",
+    "login_title": "Iniciar Sesión",
+    "your_name": "Tu Nombre",
+    "enter_name": "Ingresa tu nombre completo",
+    "name_help_text": "Tu nombre se mostrará junto a la dirección de tu billetera",
+    "id_verification_prompt": "Por favor ingresa tu cédula de identidad para verificar tu elegibilidad",
+    "id_number": "Número de Cédula",
+    "id_required": "La cédula es requerida",
+    "only_numbers": "La cédula solo debe contener números",
+    "invalid_id_format": "Formato de cédula inválido. Debe comenzar con 012 o 402 y tener 11 caracteres.",
+    "id_format_help": "Tu cédula debe comenzar con 012 o 402 y tener 11 caracteres en total.",
+    "verifying": "Verificando...",
+    "continue": "Continuar",
+    "id_verified": "Cédula verificada",
+    "use_different_id": "Usar otra cédula"
+  },
+  "footer": {
+    "description": "Un sistema de votación seguro, transparente y descentralizado construido con tecnología blockchain.",
+    "links": "Enlaces",
+    "resources": "Recursos",
+    "copyright": "Todos los derechos reservados."
+  },
+  "dashboard": {
+    "title": "Panel Principal",
+    "platform_stats": "Estadísticas de la Plataforma",
+    "welcome": {
+      "title": "Bienvenido a la Plataforma de Votación Blockchain",
+      "authenticated": "¡Hola! Has iniciado sesión como {{address}}",
+      "not_authenticated": "No estás conectado. Por favor, conecta tu billetera para participar en elecciones."
+    },
+    "stats": {
+      "active_elections": "Elecciones Activas"
+    },
+    "active_elections": "Elecciones Activas",
+    "no_active_elections": "No hay elecciones activas en este momento",
+    "view_all_elections": "Ver Todas las Elecciones",
+    "admin_section": "Herramientas de Administración",
+    "admin_cards": {
+      "create": "Crear Elección",
+      "create_text": "Configura una nueva elección con parámetros personalizados, información de candidatos y reglas de votación.",
+      "manage": "Gestionar Elecciones",
+      "manage_text": "Revisa las elecciones en curso, gestiona candidatos y monitorea la actividad de votación.",
+      "manage_button": "Ir al Panel de Administración",
+      "analytics": "Análisis de Votación",
+      "analytics_text": "Visualiza estadísticas detalladas y conocimientos sobre elecciones, participación de votantes y resultados.",
+      "analytics_button": "Ver Análisis"
+    },
+    "no_recent_activity": "No hay actividad reciente para mostrar."
+  },
+  "common": {
+    "loading": "Cargando",
+    "back": "Volver",
+    "cancel": "Cancelar",
+    "processing": "Procesando...",
+    "copied_to_clipboard": "Copiado al portapapeles"
+  },
+  "config": {
+    "title": "Configuración del Sistema",
+    "election_management": "Gestión de Elecciones",
+    "election_start": "Inicio de Elección",
+    "election_type": "Tipo de Elección",
+    "type_presidential": "Presidencial",
+    "type_municipal": "Municipal",
+    "user_management": "Gestión de Usuarios",
+    "voter_registration": "Registro de Votantes",
+    "enable_registration": "Habilitar Registro",
+    "auth_method": "Método de Autenticación",
+    "auth_wallet": "Billetera Blockchain",
+    "security_settings": "Configuración de Seguridad",
+    "enable_2fa": "Habilitar Autenticación de Dos Factores",
+    "enable_encryption": "Habilitar Cifrado de Datos",
+    "notification_settings": "Configuración de Notificaciones",
+    "enable_email_notifications": "Habilitar Notificaciones por Correo",
+    "enable_sms_notifications": "Habilitar Notificaciones por SMS",
+    "language_settings": "Configuración de Idioma",
+    "default_language": "Idioma Predeterminado",
+    "language_spanish": "Español",
+    "language_english": "Inglés",
+    "audit_logs": "Registros de Auditoría",
+    "enable_logging": "Habilitar Registro de Actividades",
+    "theme_customization": "Personalización de Temas",
+    "custom_themes": "Temas Personalizados",
+    "enter_theme_name": "Ingrese el nombre del tema",
+    "apply_theme": "Aplicar Tema",
+    "preset_themes": "Temas Predefinidos",
+    "theme_corporate": "Corporativo",
+    "theme_casual": "Casual",
+    "accessibility_enhancements": "Mejoras de Accesibilidad",
+    "enable_keyboard_navigation": "Habilitar Navegación por Teclado",
+    "ensure_screen_reader_compatibility": "Asegurar Compatibilidad con Lectores de Pantalla",
+    "provide_color_blind_mode": "Proveer Modo para Daltónicos",
+    "save_changes": "Guardar Cambios"
+  }
+}

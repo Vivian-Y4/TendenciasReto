@@ -1,0 +1,159 @@
+/* Main App Styles */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main.container {
+  flex-grow: 1;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+/* Loading state */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  color: #555;
+}
+
+/* Activity stream */
+.activity-stream {
+  position: relative;
+}
+
+.activity-stream::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 10px;
+  width: 2px;
+  background-color: #e9ecef;
+  z-index: 0;
+}
+
+.activity-item {
+  position: relative;
+  z-index: 1;
+  padding-bottom: 15px;
+}
+
+.activity-icon {
+  width: 24px;
+  height: 24px;
+  background-color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chart containers */
+.chart-container {
+  position: relative;
+  margin: auto;
+  height: 300px;
+  width: 100%;
+}
+
+/* Card hover effect */
+.card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+}
+
+/* Button styles */
+.btn-blockchain {
+  background-color: #7952b3;
+  border-color: #7952b3;
+  color: white;
+}
+
+.btn-blockchain:hover {
+  background-color: #673ab7;
+  border-color: #673ab7;
+  color: white;
+}
+
+/* Form styles */
+.form-label {
+  font-weight: 500;
+}
+
+/* Election Status */
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  font-weight: bold;
+}
+
+.status-active {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.status-ended {
+  background-color: rgba(108, 117, 125, 0.2);
+  color: #6c757d;
+}
+
+.status-upcoming {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+/* Voting Interface */
+.candidate-card {
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.candidate-card:hover {
+  border-color: #dee2e6;
+}
+
+.candidate-card.selected {
+  border-color: #007bff;
+  background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Footer positioning */
+footer {
+  margin-top: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .chart-container {
+    height: 250px;
+  }
+}
+
+/* Animation for loading states */
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.loading-pulse {
+  animation: pulse 1.5s infinite ease-in-out;
+}

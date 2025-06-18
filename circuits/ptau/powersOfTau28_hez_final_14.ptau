@@ -1,0 +1,4 @@
+# This is a placeholder for the actual Powers of Tau file.
+# A real .ptau file is a large binary file required for ZK-SNARK trusted setups.
+# Download e.g. from https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_14.ptau
+This file is intentionally small for simulation purposes.

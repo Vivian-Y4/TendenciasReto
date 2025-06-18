@@ -1,0 +1,362 @@
+{
+  "app": {
+    "title": "Blockchain Voting Platform",
+    "description": "A secure, transparent, and decentralized electronic voting system built on blockchain technology."
+  },
+  "navbar": {
+    "home": "Home",
+    "elections": "Elections",
+    "about": "About",
+    "help": "Help",
+    "admin": "Admin Dashboard",
+    "wallet": "Wallet",
+    "connect": "Connect Wallet",
+    "logout": "Logout"
+  },
+  "home": {
+    "title": "Secure Blockchain Voting Platform",
+    "subtitle": "A transparent, secure, and decentralized electronic voting system built on blockchain technology.",
+    "connect_button": "Connect Wallet to Get Started",
+    "features": {
+      "auth_title": "Secure Authentication",
+      "auth_text": "Connect securely with your blockchain wallet. Your identity is verified using cryptographic proof, ensuring that only eligible voters can participate in elections.",
+      "voting_title": "Transparent Voting",
+      "voting_text": "All votes are recorded on the blockchain, creating an immutable record that cannot be altered. Every vote is counted accurately, and the integrity of the election is preserved.",
+      "privacy_title": "Anonymous Ballots",
+      "privacy_text": "Your vote remains anonymous. While the blockchain records that you have voted, it does not reveal your specific choices, protecting your privacy."
+    },
+    "participate": {
+      "title": "Participate in Elections",
+      "text": "Browse current and upcoming elections, review candidate information, and cast your vote securely using blockchain technology.",
+      "button": "View Elections"
+    },
+    "admin_section": {
+      "title": "Manage Elections",
+      "text": "Create new elections, manage candidates, monitor voting activity, and finalize election results.",
+      "button": "Admin Dashboard"
+    },
+    "results_section": {
+      "title": "Election Results",
+      "text": "View verified election results that are cryptographically secured by the blockchain.",
+      "button": "View Results"
+    },
+    "how_it_works": {
+      "title": "How It Works",
+      "step1_title": "Connect Wallet",
+      "step1_text": "Authenticate with your blockchain wallet",
+      "step2_title": "Register",
+      "step2_text": "Verify your eligibility to vote",
+      "step3_title": "Cast Your Vote",
+      "step3_text": "Select your candidate and sign the transaction",
+      "step4_title": "Verify",
+      "step4_text": "Confirm your vote on the blockchain"
+    },
+    "analytics": "Voting Analytics",
+    "analytics_text": "View detailed statistics and insights about elections, voter turnout, and results.",
+    "analytics_button": "View Analytics"
+  },
+  "elections": {
+    "title": "Available Elections",
+    "no_elections": "There are currently no elections to display.",
+    "details_button": "View Details",
+    "status": {
+      "active": "Active",
+      "ended": "Ended",
+      "upcoming": "Upcoming"
+    },
+    "fields": {
+      "start": "Start",
+      "end": "End",
+      "candidates": "Candidates",
+      "total_votes": "Total Votes"
+    }
+  },
+  "election_details": {
+    "back_button": "Back to Elections",
+    "candidates": "Candidates",
+    "no_candidates": "No candidates available for this election.",
+    "actions": "Actions",
+    "status": {
+      "not_registered": "You are not registered for this election. Please contact the election administrator.",
+      "already_voted": "You have already cast your vote in this election.",
+      "eligible": "You are eligible to vote in this election.",
+      "not_started": "This election has not started yet. Voting begins on",
+      "ended": "This election has ended and is no longer accepting votes."
+    },
+    "buttons": {
+      "cast_vote": "Cast Your Vote",
+      "view_results": "View Results"
+    },
+    "info": {
+      "title": "Election Information",
+      "results_finalized": "Results Finalized",
+      "candidate_count": "Candidate Count",
+      "total_votes": "Total Votes"
+    }
+  },
+  "voting": {
+    "title": "Cast Your Vote",
+    "select_candidate": "Select a Candidate",
+    "submit_vote": "Submit Vote",
+    "cancel": "Cancel",
+    "processing": "Processing...",
+    "confirm_title": "Confirm Your Vote",
+    "confirm_prompt": "You are about to vote for:",
+    "confirm_warning": "This action cannot be undone once confirmed on the blockchain.",
+    "confirm_button": "Confirm Vote",
+    "info": {
+      "title": "Voting Information",
+      "blockchain_info": "Your vote will be securely recorded on the blockchain. This requires a small transaction fee.",
+      "how_title": "How Voting Works:",
+      "how_step1": "Select your preferred candidate",
+      "how_step2": "Confirm your selection",
+      "how_step3": "Sign the transaction with your wallet",
+      "how_step4": "Wait for blockchain confirmation",
+      "notes_title": "Important Notes:",
+      "notes_item1": "Your vote is anonymous",
+      "notes_item2": "You can only vote once",
+      "notes_item3": "Votes cannot be changed after submission",
+      "notes_item4": "You need enough ETH in your wallet for gas fees"
+    }
+  },
+  "results": {
+    "title": "Election Results",
+    "distribution": "Vote Distribution",
+    "comparison": "Vote Comparison",
+    "detailed_results": "Detailed Results",
+    "blockchain_verification": "About Blockchain Verification",
+    "verification_text": "All vote results are stored immutably on the blockchain and can be independently verified. The integrity of these results is guaranteed by cryptographic proof.",
+    "last_updated": "Results last updated",
+    "verify_button": "Verify on Blockchain",
+    "table": {
+      "rank": "Rank",
+      "candidate": "Candidate",
+      "description": "Description",
+      "votes": "Votes",
+      "percentage": "Percentage"
+    },
+    "not_available": "Results for this election are not available yet. Results will be published after the election ends."
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "create_button": "Create New Election",
+    "stats": {
+      "total_elections": "Total Elections",
+      "registered_voters": "Registered Voters",
+      "total_votes": "Total Votes Cast"
+    },
+    "tabs": {
+      "all": "All Elections",
+      "active": "Active Elections",
+      "ended": "Ended Elections"
+    },
+    "no_elections": "No elections found. Create a new election to get started.",
+    "no_active": "No active elections found.",
+    "no_ended": "No ended elections found.",
+    "table": {
+      "id": "ID",
+      "title": "Title",
+      "start_time": "Start Time",
+      "end_time": "End Time",
+      "status": "Status",
+      "votes": "Votes",
+      "actions": "Actions",
+      "finalized": "Finalized",
+      "total_votes": "Total Votes"
+    },
+    "actions": {
+      "view": "View",
+      "end": "End",
+      "finalize": "Finalize",
+      "results": "Results",
+      "edit": "Edit",
+      "manage_voters": "Manage Voters",
+      "statistics": "Statistics"
+    },
+    "activity": {
+      "title": "Recent Activity",
+      "created": "Election created",
+      "registered": "Voters registered",
+      "voted": "Vote recorded",
+      "ended": "Election ended",
+      "finalized": "Results finalized"
+    },
+    "edit": {
+      "title": "Edit Election",
+      "loading_election": "Loading election details...",
+      "current_start": "Current Start Time",
+      "current_end": "Current End Time",
+      "time_note": "Time fields cannot be modified once an election is created. To change times, please create a new election.",
+      "updating": "Updating Election...",
+      "update_button": "Update Election",
+      "update_success": "Election updated successfully",
+      "update_error": "Error updating election",
+      "update_failed": "Failed to update election",
+      "already_started": "This election has already started and cannot be edited."
+    },
+    "voters": {
+      "title": "Manage Voters",
+      "loading": "Loading voters...",
+      "registered_count": "{{count}} registered voters",
+      "search_placeholder": "Search by address...",
+      "add_voter": "Add Voter",
+      "bulk_add": "Bulk Add",
+      "address": "Wallet Address",
+      "registration_date": "Registration Date",
+      "status": "Status",
+      "actions": "Actions",
+      "no_voters": "No voters registered for this election.",
+      "no_results": "No voters found matching your search.",
+      "has_voted": "Voted",
+      "not_voted": "Not Voted",
+      "showing_filtered": "Showing {{count}} of {{total}} voters",
+      "showing_all": "Showing all {{count}} voters",
+      "clear_search": "Clear Search",
+      "enter_address": "Enter Ethereum Address",
+      "address_format": "Must be a valid Ethereum address (0x...)",
+      "add": "Add Voter",
+      "add_success": "Voter added successfully",
+      "add_error": "Error adding voter",
+      "invalid_address": "Invalid Ethereum address",
+      "enter_addresses": "Enter Ethereum Addresses (one per line or comma-separated)",
+      "addresses_format": "Each address must be a valid Ethereum address (0x...)",
+      "add_multiple": "Add Voters",
+      "bulk_add_success": "Successfully added {{count}} voters",
+      "bulk_add_error": "Error adding voters in bulk",
+      "some_invalid_addresses": "Some addresses are invalid. Please check and try again.",
+      "no_addresses": "No valid addresses found",
+      "remove_voter": "Remove Voter",
+      "remove_confirm": "Are you sure you want to remove this voter?",
+      "remove_warning": "This action cannot be undone. Removed voters will no longer be able to participate in this election.",
+      "remove": "Remove",
+      "remove_success": "Voter removed successfully",
+      "remove_error": "Error removing voter",
+      "election_fetch_error": "Failed to fetch election details",
+      "voters_fetch_error": "Failed to fetch voters",
+      "fetch_error": "Error loading voter data",
+      "cannot_modify": "Voters cannot be modified once an election has started."
+    },
+    "stats": {
+      "title": "Election Statistics",
+      "loading": "Loading statistics...",
+      "download_report": "Download Report",
+      "no_stats_available": "No statistics available for this election yet.",
+      "registered_voters": "Registered Voters",
+      "votes_cast": "Votes Cast",
+      "participation_rate": "Participation Rate",
+      "candidates": "Candidates",
+      "voting_results": "Voting Results",
+      "voter_participation": "Voter Participation",
+      "voting_timeline": "Voting Timeline",
+      "candidate_votes": "Candidate Votes Distribution",
+      "participation": "Participation Overview",
+      "voting_activity": "Voting Activity Over Time",
+      "participation_summary": "Participation Summary",
+      "registered": "Registered",
+      "voted": "Voted",
+      "not_voted": "Not Voted",
+      "votes": "Votes",
+      "votes_count": "Number of Votes",
+      "percentage": "Percentage",
+      "candidate": "Candidate",
+      "votes_over_time": "Distribution of votes over the election period",
+      "number_of_votes": "Number of Votes",
+      "time_period": "Time Period",
+      "election_fetch_error": "Failed to fetch election details",
+      "stats_fetch_error": "Failed to fetch statistics",
+      "fetch_error": "Error loading statistics data"
+    }
+  },
+  "create_election": {
+    "title": "Create New Election",
+    "details_section": "Election Details",
+    "fields": {
+      "title": "Election Title",
+      "title_placeholder": "Enter a title for the election",
+      "description": "Election Description",
+      "description_placeholder": "Provide a detailed description of the election",
+      "start_date": "Start Date",
+      "start_time": "Start Time",
+      "end_date": "End Date",
+      "end_time": "End Time"
+    },
+    "candidates_section": "Candidates",
+    "add_candidate": "Add Candidate",
+    "candidate": {
+      "title": "Candidate #",
+      "name": "Name",
+      "name_placeholder": "Enter candidate name",
+      "description": "Description",
+      "description_placeholder": "Enter candidate description or platform"
+    },
+    "buttons": {
+      "create": "Create Election",
+      "creating": "Creating Election...",
+      "cancel": "Cancel"
+    }
+  },
+  "auth": {
+    "connect_wallet": "Connect Your Wallet",
+    "connect_prompt": "Connect your blockchain wallet to authenticate and participate in elections.",
+    "connect_button": "Connect with MetaMask",
+    "connecting": "Connecting...",
+    "why_connect": "Why Connect a Wallet?",
+    "why_text": "Your wallet provides a secure way to authenticate and sign transactions on the blockchain. This ensures the integrity of your vote and prevents fraud.",
+    "no_wallet": "Don't have a wallet?",
+    "install_metamask": "Install MetaMask",
+    "auto_connected": "Wallet connected automatically",
+    "checking_wallet": "Checking wallet connection...",
+    "connection_failed": "Failed to connect wallet",
+    "connection_success": "Successfully connected wallet!",
+    "generic_error": "An error occurred. Please try again."
+  },
+  "errors": {
+    "load_elections": "Failed to load elections. Please try again later.",
+    "retry": "Retry",
+    "election_not_found": "Election not found.",
+    "load_details": "Failed to load election details. Please try again later.",
+    "load_results": "Failed to load election results. Please try again later.",
+    "vote_failed": "Failed to cast vote. Please try again.",
+    "create_failed": "Failed to create election. Please try again."
+  },
+  "footer": {
+    "description": "A secure, transparent, and decentralized voting system built on blockchain technology.",
+    "links": "Links",
+    "resources": "Resources",
+    "copyright": "All rights reserved."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "platform_stats": "Platform Statistics",
+    "welcome": {
+      "title": "Welcome to the Blockchain Voting Platform",
+      "authenticated": "Hello! You are signed in as {{address}}",
+      "not_authenticated": "You are not connected. Please connect your wallet to participate in elections."
+    },
+    "stats": {
+      "active_elections": "Active Elections"
+    },
+    "active_elections": "Active Elections",
+    "no_active_elections": "There are no active elections at the moment",
+    "view_all_elections": "View All Elections",
+    "admin_section": "Admin Tools",
+    "admin_cards": {
+      "create": "Create Election",
+      "create_text": "Set up a new election with custom parameters, candidate information, and voting rules.",
+      "manage": "Manage Elections",
+      "manage_text": "Review ongoing elections, manage candidates, and monitor voting activity.",
+      "manage_button": "Go to Admin Panel",
+      "analytics": "Voting Analytics",
+      "analytics_text": "View detailed statistics and insights about elections, voter turnout, and results.",
+      "analytics_button": "View Analytics"
+    },
+    "no_recent_activity": "No recent activity to display."
+  },
+  "common": {
+    "loading": "Loading",
+    "back": "Back",
+    "cancel": "Cancel",
+    "processing": "Processing...",
+    "copied_to_clipboard": "Copied to clipboard"
+  }
+}
