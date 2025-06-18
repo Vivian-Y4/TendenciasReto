@@ -22,11 +22,16 @@ const createCandidate = async (req, res, next) => {
       manifesto,
       electionId,
       categoryId,
-      position,
+      position, // This is the numeric ordering field
       walletAddress,
       email,
       phone,
-      isActive
+      isActive,
+      // New fields:
+      proposals,
+      province,
+      municipality,
+      officeSought // Descriptive name of the position/role
     } = req.body;
 
     // Validar datos obligatorios
@@ -53,7 +58,7 @@ const createCandidate = async (req, res, next) => {
     }
 
     // Crear candidato
-    const candidate = await Candidate.create({
+    const candidateData = {
       firstName,
       lastName,
       party,
@@ -61,15 +66,26 @@ const createCandidate = async (req, res, next) => {
       manifesto,
       election: electionId,
       category: categoryId,
-      position: position || 0,
+      // position is for numeric ordering, handled if provided
       walletAddress,
       contactInfo: {
         email,
         phone
       },
       registeredBy: req.user._id,
-      isActive: isActive !== undefined ? isActive : true
-    });
+      isActive: isActive !== undefined ? isActive : true,
+      // New fields:
+      proposals,
+      province,
+      municipality,
+      officeSought
+    };
+
+    if (position !== undefined) { // Numeric ordering position
+        candidateData.position = position;
+    }
+
+    const candidate = await Candidate.create(candidateData);
 
     // Si hay una foto del candidato, procesarla
     if (req.file) {
@@ -113,7 +129,8 @@ const createCandidate = async (req, res, next) => {
           id: electionId,
           title: election.title
         },
-        party: candidate.party
+        party: candidate.party,
+        officeSought: candidate.officeSought
       }
     });
 
@@ -172,7 +189,7 @@ const getCandidates = async (req, res, next) => {
 
     // Obtener candidatos
     const candidates = await Candidate.find(filter)
-      .populate('election', 'title')
+      .populate('election', 'title level') // Added level
       .populate('category', 'name')
       .populate('registeredBy', 'username name')
       .sort(sort)
@@ -203,7 +220,7 @@ const getCandidates = async (req, res, next) => {
 const getCandidateById = async (req, res, next) => {
   try {
     const candidate = await Candidate.findById(req.params.id)
-      .populate('election', 'title startDate endDate')
+      .populate('election', 'title startDate endDate level') // Added level
       .populate('category', 'name')
       .populate('registeredBy', 'username name');
 
@@ -238,7 +255,12 @@ const updateCandidate = async (req, res, next) => {
       walletAddress,
       email,
       phone,
-      isActive
+      isActive,
+      // New fields for update:
+      proposals,
+      province,
+      municipality,
+      officeSought
     } = req.body;
 
     const candidateToUpdate = await Candidate.findById(req.params.id).populate('election'); // Populate election details
@@ -259,7 +281,9 @@ const updateCandidate = async (req, res, next) => {
         let allowedUpdate = true;
         const forbiddenFields = [
           'firstName', 'lastName', 'party', 'biography', 'manifesto',
-          'categoryId', 'position', 'walletAddress', 'electionId' // electionId shouldn't change anyway
+          'categoryId', 'position', 'walletAddress', 'electionId', // electionId shouldn't change anyway
+          // Add new fields to forbidden list for active election
+          'proposals', 'province', 'municipality', 'officeSought'
         ];
 
         if (req.file) { // Photo update is forbidden during active election
@@ -316,8 +340,14 @@ const updateCandidate = async (req, res, next) => {
             candidateToUpdate.category = categoryId;
         }
     }
-    if (position !== undefined) candidateToUpdate.position = position;
+    if (position !== undefined) candidateToUpdate.position = position; // Numeric ordering field
     if (walletAddress) candidateToUpdate.walletAddress = walletAddress;
+
+    // New fields - only update if election is not active (logic for this is above)
+    if (proposals !== undefined) candidateToUpdate.proposals = proposals;
+    if (province !== undefined) candidateToUpdate.province = province;
+    if (municipality !== undefined) candidateToUpdate.municipality = municipality;
+    if (officeSought !== undefined) candidateToUpdate.officeSought = officeSought;
 
     // isActive is always allowed to be updated
     if (isActive !== undefined) candidateToUpdate.isActive = isActive;
@@ -563,6 +593,7 @@ const getCandidatesByElection = async (req, res, next) => {
 
     // Obtener candidatos
     const candidates = await Candidate.find(filter)
+      .populate('election', 'title level') // Added level
       .populate('category', 'name')
       .sort({ category: 1, position: 1, lastName: 1 });
 
