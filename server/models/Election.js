@@ -91,6 +91,20 @@ const electionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  level: { // Added as per prompt example and frontend needs
+    type: String,
+    required: [true, 'El nivel de la elección es requerido'],
+    enum: ['presidencial', 'senatorial', 'diputados', 'municipal'],
+    trim: true
+  },
+  province: { // New field
+    type: String,
+    trim: true
+  },
+  municipality: { // New field
+    type: String,
+    trim: true
+  },
   
   // Fechas
   startDate: {
