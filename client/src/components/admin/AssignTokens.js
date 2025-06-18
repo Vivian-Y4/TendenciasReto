@@ -86,9 +86,15 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       if (!response.ok) {
         // Get the error message from the response
         const errorText = await response.text();
-        const errorMessage = errorText.includes('No se encontraron votantes') 
-          ? `No hay votantes registrados para la provincia ${selectedProvince}.` 
-          : `Error al obtener votantes: ${response.statusText}`;
+        let errorMessage;
+        if (response.status === 404) {
+          errorMessage = `No hay votantes registrados para la provincia ${selectedProvince}.`;
+        } else if (errorText.includes('No se encontraron votantes')) {
+          errorMessage = `No hay votantes registrados para la provincia ${selectedProvince}.`;
+        } else {
+          errorMessage = `Error al obtener votantes: ${response.statusText}`;
+        }
+        
         setGroupStatus(errorMessage);
         setHasVoters(false);
         setGroupLoading(false);
@@ -102,13 +108,12 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         setGroupLoading(false);
         return;
       }
-
       const votersToProcess = data.voters;
       setGroupStatus(`Votantes encontrados: ${votersToProcess.length}. Iniciando asignación...`);
       setHasVoters(true);
 
       if (!window.ethereum) {
-        setGroupStatus("Error: Metamask no detectado.");
+        setGroupStatus("Error: MetaMask no está instalado o no está activo en esta página.");
         setGroupLoading(false);
         return;
       }
@@ -125,12 +130,6 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       const parsedGroupAmount = ethers.utils.parseUnits(groupAmount, 18);
 
       for (const voter of votersToProcess) {
-        if (!voter.walletAddress) {
-          failedAssignments.push({ voter: voter.firstName, error: "Dirección de wallet no encontrada." });
-          failCount++;
-          continue;
-        }
-
         try {
           const tx = await contract.transfer(voter.walletAddress, parsedGroupAmount);
           await tx.wait();
@@ -144,7 +143,8 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
 
           if (err.reason && err.reason.includes("No autorizado para transferir")) {
             setGroupStatus(`Error de autorización: ${specificError}. Se detuvo la asignación masiva.`);
-            break;
+            setGroupLoading(false);
+            return;
           }
         }
       }
@@ -155,10 +155,6 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         console.error("Fallos en asignación grupal:", failedAssignments);
       }
       setGroupStatus(summaryMessage);
-      // Clear fields on success or partial success
-      // setSelectedProvince('');
-      // setGroupAmount('');
-
     } catch (error) {
       console.error('Error en handleGroupAssign:', error);
       setGroupStatus('Error durante la asignación grupal: ' + error.message);
