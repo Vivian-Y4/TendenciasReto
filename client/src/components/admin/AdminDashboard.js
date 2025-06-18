@@ -24,7 +24,7 @@ import axios from "axios";
 import AssignTokens from './AssignTokens';
 import ManageCandidates from './ManageCandidates'; // Ensure this import is correct
 import { PROVINCES } from '../../constants/provinces'; // Adjust path if necessary
-import deploymentInfo from "../../../../deployment-info.json";
+import deploymentInfo from "../../config/deployment-info.json";
 
 // Helper function for translations (if used)
 // function accionEnEspanol(action) { ... }

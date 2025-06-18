@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
-  Container, Card, Table, Form, Button, Alert, Spinner, Modal, Row, Col, Badge, InputGroup
+  Container, Card, Table, Form, Button, Alert, Spinner, Modal, Row, Col, Badge, InputGroup, Image
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import AdminContext from '../../context/AdminContext'; // Assuming this context provides auth/permissions
