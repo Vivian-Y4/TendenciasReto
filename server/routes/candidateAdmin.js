@@ -39,12 +39,12 @@ router.put('/:id', adminAuth, imageUpload.single('photo'), candidateAdminControl
  */
 router.delete('/:id', adminAuth, candidateAdminController.deleteCandidate);
 
-/**
- * @route   GET /api/admin/elections/:electionId/candidates
- * @desc    Obtener candidatos por elección
- * @access  Privado (Admin)
- */
-router.get('/elections/:electionId/candidates', adminAuth, candidateAdminController.getCandidatesByElection);
+// /**
+//  * @route   GET /api/admin/elections/:electionId/candidates
+//  * @desc    Obtener candidatos por elección
+//  * @access  Privado (Admin)
+//  */
+// router.get('/elections/:electionId/candidates', adminAuth, candidateAdminController.getCandidatesByElection);
 
 /**
  * @route   PATCH /api/admin/elections/:electionId/candidates/reorder
