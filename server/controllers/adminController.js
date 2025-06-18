@@ -231,20 +231,32 @@ exports.createElection = async (req, res) => {
       endDate,
       level,
       province,
+      municipality, // Added municipality
       ...rest
     } = req.body;
 
     const electionData = {
-      title,
+      title: title || req.body.name, // Fallback for 'name' if used
+      name: req.body.name || title,   // Ensure both name and title are present
       description,
-      startDate: typeof startDate === 'number' ? new Date(startDate * 1000) : startDate,
-      endDate: typeof endDate === 'number' ? new Date(endDate * 1000) : endDate,
-      level,
+      startDate: typeof startDate === 'number' ? new Date(startDate * 1000) : new Date(startDate),
+      endDate: typeof endDate === 'number' ? new Date(endDate * 1000) : new Date(endDate),
+      level: level.toLowerCase(),
       province,
+      municipality, // Added municipality
       createdBy: req.user?.id || req.admin?.id,
       lastModifiedBy: req.user?.id || req.admin?.id,
-      ...rest
+      ...rest // Spread other potential fields if any
     };
+
+    // Logic based on level
+    if (electionData.level === 'presidencial') {
+        electionData.province = undefined;
+        electionData.municipality = undefined;
+    } else if (electionData.level === 'senatorial' || electionData.level === 'diputados') {
+        electionData.municipality = undefined;
+    }
+    // For 'municipal' level, both province and municipality can be set.
 
     const election = await Election.create(electionData);
     return res.status(201).json({ success: true, election });
@@ -256,8 +268,59 @@ exports.createElection = async (req, res) => {
 
 exports.updateElection = async (req, res) => {
   try {
-    const election = await Election.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!election) return res.status(404).json({ success: false, message: 'Election not found' });
+    const election = await Election.findById(req.params.id);
+    if (!election) {
+      return res.status(404).json({ success: false, message: 'Election not found' });
+    }
+
+    const { title, name, description, startDate, endDate, level, province, municipality, status } = req.body;
+
+    // Update fields
+    if (title || name) {
+        election.title = title || name;
+        election.name = name || title; // Ensure both are updated if one is provided
+    }
+    if (description !== undefined) election.description = description;
+    if (startDate) election.startDate = new Date(startDate);
+    if (endDate) election.endDate = new Date(endDate);
+    if (status) election.status = status; // Allow status updates
+
+    // Handle level, province, municipality updates with logic
+    if (level) {
+      election.level = level.toLowerCase();
+      if (election.level === 'presidencial') {
+        election.province = undefined;
+        election.municipality = undefined;
+      } else if (election.level === 'senatorial' || election.level === 'diputados') {
+        // If level changes to provincial, province might be set, municipality should be cleared
+        if (province !== undefined) election.province = province;
+        election.municipality = undefined;
+      } else if (election.level === 'municipal') {
+        // If level is municipal, both can be set
+        if (province !== undefined) election.province = province;
+        if (municipality !== undefined) election.municipality = municipality;
+      }
+    } else {
+      // Level is not changing, but province/municipality might be
+      if (election.level !== 'presidencial') { // Only update if not presidential
+          if (province !== undefined) election.province = province;
+          if (election.level === 'municipal') { // Only update municipality if level is municipal
+              if (municipality !== undefined) election.municipality = municipality;
+          } else {
+            // If not municipal level (e.g. senatorial, diputados), ensure municipality is undefined if explicitly passed as null or for safety
+            if (req.body.hasOwnProperty('municipality') && municipality === null) {
+                 election.municipality = undefined;
+            } else if (municipality !== undefined && election.level !== 'municipal') {
+                 // If municipality is provided for non-municipal level, ignore or clear it
+                 election.municipality = undefined;
+            }
+          }
+      }
+    }
+
+    election.lastModifiedBy = req.user?.id || req.admin?.id;
+
+    await election.save();
     res.json({ success: true, election });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error updating election', error: error.message });
