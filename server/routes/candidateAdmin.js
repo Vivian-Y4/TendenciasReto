@@ -53,4 +53,11 @@ router.get('/elections/:electionId/candidates', adminAuth, candidateAdminControl
  */
 router.patch('/elections/:electionId/candidates/reorder', adminAuth, candidateAdminController.reorderCandidates);
 
+/**
+ * @route   PATCH /api/admin/candidates/:id/status
+ * @desc    Actualizar el estado (activo/inactivo) de un candidato
+ * @access  Privado (Admin)
+ */
+router.patch('/:id/status', adminAuth, candidateAdminController.updateCandidateStatus);
+
 module.exports = router;

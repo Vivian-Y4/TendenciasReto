@@ -84,7 +84,9 @@ const candidateSchema = new Schema({
   walletAddress: {
     type: String,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    unique: true,
+    sparse: true
   },
   
   // Medios
@@ -126,6 +128,21 @@ const candidateSchema = new Schema({
   },
   
   // Estadísticas y resultados
+  proposals: { // New field
+    type: String
+  },
+  province: { // New field
+    type: String,
+    trim: true
+  },
+  municipality: { // New field
+    type: String,
+    trim: true
+  },
+  officeSought: { // New field for the role/position name
+    type: String,
+    trim: true
+  },
   votes: {
     type: Number,
     default: 0

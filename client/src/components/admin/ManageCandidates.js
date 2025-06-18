@@ -1,129 +1,172 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { Container, Card, Table, Form, Button, Alert, Spinner, InputGroup, Modal, Row, Col, Image } from 'react-bootstrap';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
+import {
+  Container, Card, Table, Form, Button, Alert, Spinner, Modal, Row, Col, Badge, InputGroup
+} from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import AdminContext from '../../context/AdminContext';
+import AdminContext from '../../context/AdminContext'; // Assuming this context provides auth/permissions
 
-const ManageCandidates = () => {
-  const { isAdminAuthenticated, adminPermissions, adminLoading } = useContext(AdminContext);
+// Base URL for API calls, ensure your environment variable is set up
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+
+const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionEnded: hasElectionEndedProp, allElections: allElectionsFromDashboard }) => {
+  const { isAdminAuthenticated, adminPermissions } = useContext(AdminContext);
 
   const [elections, setElections] = useState([]);
-  const [selectedElection, setSelectedElection] = useState('');
+  const [selectedElectionId, setSelectedElectionId] = useState('');
+  const [selectedElectionObject, setSelectedElectionObject] = useState(null);
+  const [isCurrentElectionActive, setIsCurrentElectionActive] = useState(false);
+
   const [candidates, setCandidates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [loadingElections, setLoadingElections] = useState(true);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false); // For modal operations
+  const [statusToggleLoading, setStatusToggleLoading] = useState({}); // For individual status toggles
+
   const [error, setError] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showRemoveModal, setShowRemoveModal] = useState(false);
-  const [candidateToRemove, setCandidateToRemove] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [newCandidate, setNewCandidate] = useState({
-    walletAddress: '',
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCandidateData, setNewCandidateData] = useState({
     firstName: '',
     lastName: '',
     party: '',
-    imageUrl: ''
+    officeSought: '', // e.g., "Alcalde", "Presidente"
+    walletAddress: '',
+    photoUrl: '',
+    biography: '',
+    proposals: '',
+    province: '',
+    municipality: '',
   });
-  const [imagePreview, setImagePreview] = useState('');
 
-  // Solo carga datos si eres admin y estás autenticado
-  useEffect(() => {
-    if (isAdminAuthenticated && adminPermissions) {
-      fetchElections();
-    }
-  }, [isAdminAuthenticated, adminPermissions]);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState(null); // Stores the full candidate object being edited
+  const [editCandidateData, setEditCandidateData] = useState({});
 
-  useEffect(() => {
-    if (selectedElection) {
-      fetchCandidates(selectedElection);
-    } else {
-      setCandidates([]);
-    }
-  }, [selectedElection]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [candidateToDelete, setCandidateToDelete] = useState(null);
 
-  useEffect(() => {
-    setImagePreview(newCandidate.imageUrl);
-  }, [newCandidate.imageUrl]);
-
-  const fetchElections = async () => {
+  // Fetch all elections for the dropdown
+  const fetchElections = useCallback(async () => {
+    if (!isAdminAuthenticated) return;
+    setLoadingElections(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      const res = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/admin/elections`,
-        {
-          headers: { 'x-auth-token': localStorage.getItem('adminToken') }
-        }
-      );
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${API_BASE_URL}/api/admin/elections`, {
+        headers: { 'x-auth-token': token }
+      });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Error al cargar elecciones');
-      setElections(data.elections || []);
-      if (data.elections && data.elections.length > 0) {
-        setSelectedElection(data.elections[0]._id);
+      setElections(data.elections || data.data || []);
+      // Try to pre-select the first election if available
+      if (data.elections && data.elections.length > 0 && !selectedElectionId) {
+         // setSelectedElectionId(data.elections[0]._id); // Auto-select first election
       }
     } catch (err) {
       setError(err.message || 'Error al cargar elecciones');
+      toast.error(err.message || 'Error al cargar elecciones');
     } finally {
-      setLoading(false);
+      setLoadingElections(false);
     }
-  };
+  }, [isAdminAuthenticated, selectedElectionId]); // Added selectedElectionId to dependencies
 
-  const fetchCandidates = async (electionId) => {
+  useEffect(() => {
+    fetchElections();
+  }, [fetchElections]);
+
+  // Fetch candidates when an election is selected
+  const fetchCandidatesForElection = useCallback(async () => {
+    if (!selectedElectionId || !isAdminAuthenticated) {
+      setCandidates([]);
+      return;
+    }
+    setLoadingCandidates(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      const res = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/admin/elections/${electionId}/candidates`,
-        {
-          headers: { 'x-auth-token': localStorage.getItem('adminToken') }
-        }
-      );
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${API_BASE_URL}/api/admin/elections/${selectedElectionId}/candidates`, {
+        headers: { 'x-auth-token': token }
+      });
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || 'Error al cargar candidatos');
-      setCandidates(data.candidates || []);
+      if (!data.success && data.message !== 'No candidates found for this election') { // Allow empty list
+        throw new Error(data.message || 'Error al cargar candidatos');
+      }
+      setCandidates(data.data || []); // Assuming backend returns { success: true, data: [...] }
     } catch (err) {
       setError(err.message || 'Error al cargar candidatos');
+      toast.error(err.message || 'Error al cargar candidatos');
+      setCandidates([]);
     } finally {
-      setLoading(false);
+      setLoadingCandidates(false);
+    }
+  }, [selectedElectionId, isAdminAuthenticated]);
+
+  useEffect(() => {
+    fetchCandidatesForElection();
+  }, [fetchCandidatesForElection]);
+
+  useEffect(() => {
+    if (selectedElectionId && allElectionsFromDashboard && typeof isElectionActiveProp === 'function') {
+        const currentFullElection = allElectionsFromDashboard.find(e => e._id === selectedElectionId);
+        setSelectedElectionObject(currentFullElection || null);
+        setIsCurrentElectionActive(currentFullElection ? isElectionActiveProp(currentFullElection) : false);
+    } else if (selectedElectionId && elections.length > 0 && typeof isElectionActiveProp === 'function') {
+        // Fallback to locally fetched elections if dashboard prop not ready (though less ideal for status)
+        const currentFullElection = elections.find(e => e._id === selectedElectionId);
+        setSelectedElectionObject(currentFullElection || null);
+        setIsCurrentElectionActive(currentFullElection ? isElectionActiveProp(currentFullElection) : false);
+    } else {
+        setSelectedElectionObject(null);
+        setIsCurrentElectionActive(false);
+    }
+  }, [selectedElectionId, allElectionsFromDashboard, elections, isElectionActiveProp]);
+
+
+  const handleInputChange = (e, formType) => {
+    const { name, value } = e.target;
+    if (formType === 'add') {
+      setNewCandidateData(prev => ({ ...prev, [name]: value }));
+    } else if (formType === 'edit') {
+      setEditCandidateData(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const validateEthereumAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
+  const openAddModal = () => {
+    setNewCandidateData({ // Reset form
+      firstName: '', lastName: '', party: '', officeSought: '',
+      walletAddress: '', photoUrl: '', biography: '', proposals: '',
+      province: selectedElectionObject?.level === 'presidencial' ? '' : selectedElectionObject?.province || '',
+      municipality: selectedElectionObject?.level === 'municipal' ? selectedElectionObject?.municipality || '' : '',
+    });
+    setShowAddModal(true);
+  };
 
   const handleAddCandidate = async () => {
-    if (!validateEthereumAddress(newCandidate.walletAddress)) {
-      toast.error('Dirección de Ethereum inválida');
+    if (!selectedElectionId) {
+      toast.error('Por favor, seleccione una elección primero.');
       return;
     }
-    if (!newCandidate.firstName || !newCandidate.lastName || !selectedElection) {
-      toast.error('Todos los campos son obligatorios');
-      return;
+    // Basic Validation
+    if (!newCandidateData.firstName || !newCandidateData.lastName || !newCandidateData.officeSought || !newCandidateData.party) {
+        toast.error("Nombre, Apellido, Cargo y Partido son obligatorios.");
+        return;
     }
+
+    setActionLoading(true);
     try {
-      setActionLoading(true);
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/admin/candidates`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': localStorage.getItem('adminToken')
-          },
-          body: JSON.stringify({
-            electionId: selectedElection,
-            firstName: newCandidate.firstName.trim(),
-            lastName: newCandidate.lastName.trim(),
-            party: newCandidate.party.trim(),
-            walletAddress: newCandidate.walletAddress.trim(),
-            imageUrl: newCandidate.imageUrl.trim()
-          })
-        }
-      );
+      const token = localStorage.getItem('adminToken');
+      const payload = { ...newCandidateData, electionId: selectedElectionId };
+      const response = await fetch(`${API_BASE_URL}/api/admin/candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify(payload),
+      });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'No se pudo agregar el candidato');
-      toast.success('Candidato agregado correctamente');
+      if (!data.success) throw new Error(data.message || 'Error al agregar candidato');
+      toast.success('Candidato agregado exitosamente');
       setShowAddModal(false);
-      setNewCandidate({ walletAddress: '', firstName: '', lastName: '', party: '', imageUrl: '' });
-      fetchCandidates(selectedElection);
+      fetchCandidatesForElection(); // Refresh list
     } catch (err) {
       toast.error(err.message || 'No se pudo agregar el candidato');
     } finally {
@@ -131,28 +174,75 @@ const ManageCandidates = () => {
     }
   };
 
-  const openRemoveModal = (candidate) => {
-    setCandidateToRemove(candidate);
-    setShowRemoveModal(true);
+  const openEditModal = (candidate) => {
+    setEditingCandidate(candidate);
+    setEditCandidateData({
+      firstName: candidate.firstName || '',
+      lastName: candidate.lastName || '',
+      party: candidate.party || '',
+      officeSought: candidate.officeSought || '',
+      walletAddress: candidate.walletAddress || '',
+      photoUrl: candidate.photoUrl || '',
+      biography: candidate.biography || '',
+      proposals: candidate.proposals || '',
+      province: candidate.province || '',
+      municipality: candidate.municipality || '',
+      isActive: candidate.isActive, // Keep isActive for potential direct edit if needed, though usually via toggle
+    });
+    setShowEditModal(true);
   };
 
-  const handleRemoveCandidate = async () => {
-    if (!candidateToRemove) return;
+  const handleEditCandidate = async () => {
+    if (!editingCandidate?._id) return;
+    // Basic Validation
+    if (!editCandidateData.firstName || !editCandidateData.lastName || !editCandidateData.officeSought || !editCandidateData.party) {
+        toast.error("Nombre, Apellido, Cargo y Partido son obligatorios.");
+        return;
+    }
+    setActionLoading(true);
     try {
-      setActionLoading(true);
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/admin/candidates/${candidateToRemove._id}`,
-        {
-          method: 'DELETE',
-          headers: { 'x-auth-token': localStorage.getItem('adminToken') }
-        }
-      );
+      const token = localStorage.getItem('adminToken');
+      // Remove electionId from payload as it's not typically changed, and _id is in URL
+      // eslint-disable-next-line no-unused-vars
+      const { _id, election, ...payloadToSend } = editCandidateData;
+      const response = await fetch(`${API_BASE_URL}/api/admin/candidates/${editingCandidate._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify(payloadToSend),
+      });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'No se pudo eliminar el candidato');
-      toast.success('Candidato eliminado correctamente');
-      setShowRemoveModal(false);
-      setCandidateToRemove(null);
-      fetchCandidates(selectedElection);
+      if (!data.success) throw new Error(data.message || 'Error al actualizar candidato');
+      toast.success('Candidato actualizado exitosamente');
+      setShowEditModal(false);
+      setEditingCandidate(null);
+      fetchCandidatesForElection(); // Refresh list
+    } catch (err) {
+      toast.error(err.message || 'No se pudo actualizar el candidato');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteModal = (candidate) => {
+    setCandidateToDelete(candidate);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteCandidate = async () => {
+    if (!candidateToDelete?._id) return;
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${API_BASE_URL}/api/admin/candidates/${candidateToDelete._id}`, {
+        method: 'DELETE',
+        headers: { 'x-auth-token': token },
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Error al eliminar candidato');
+      toast.success('Candidato eliminado exitosamente');
+      setShowDeleteModal(false);
+      setCandidateToDelete(null);
+      fetchCandidatesForElection(); // Refresh list
     } catch (err) {
       toast.error(err.message || 'No se pudo eliminar el candidato');
     } finally {
@@ -160,244 +250,196 @@ const ManageCandidates = () => {
     }
   };
 
-  const filteredCandidates = searchTerm
-    ? candidates.filter(c =>
-        (c.firstName + ' ' + c.lastName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.party && c.party.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (c.walletAddress && c.walletAddress.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    : candidates;
+  const handleToggleActiveStatus = async (candidateId, currentStatus) => {
+    setStatusToggleLoading(prev => ({ ...prev, [candidateId]: true }));
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${API_BASE_URL}/api/admin/candidates/${candidateId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify({ isActive: !currentStatus }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Error al cambiar estado');
+      toast.success(`Candidato ${!currentStatus ? 'activado' : 'desactivado'}`);
+      fetchCandidatesForElection(); // Refresh
+    } catch (err) {
+      toast.error(err.message || 'No se pudo cambiar el estado');
+    } finally {
+      setStatusToggleLoading(prev => ({ ...prev, [candidateId]: false }));
+    }
+  };
 
-  // Si está cargando, muestra spinner
-  if (adminLoading || loading) {
+  const filteredCandidates = candidates.filter(candidate => {
+    const searchLower = searchTerm.toLowerCase();
     return (
-      <Container className="my-5 text-center">
-        <Spinner animation="border" role="status" variant="primary" />
-        <p className="mt-3">Cargando...</p>
-      </Container>
+      candidate.firstName?.toLowerCase().includes(searchLower) ||
+      candidate.lastName?.toLowerCase().includes(searchLower) ||
+      candidate.party?.toLowerCase().includes(searchLower) ||
+      candidate.officeSought?.toLowerCase().includes(searchLower) ||
+      candidate.walletAddress?.toLowerCase().includes(searchLower)
     );
+  });
+
+  const renderElectionLevel = (election) => {
+    if (!election || !election.level) return 'N/A';
+    const levelMap = {
+      presidencial: 'Presidencial',
+      senatorial: 'Senatorial',
+      diputados: 'Diputados',
+      municipal: 'Municipal',
+    };
+    return levelMap[election.level.toLowerCase()] || election.level;
+  };
+
+  if (!isAdminAuthenticated) { // Optional: Could be handled by AdminRoute higher up
+    return <Alert variant="danger">Acceso denegado. Debe iniciar sesión como administrador.</Alert>;
+  }
+  if (loadingElections) {
+    return <Container className="text-center mt-5"><Spinner animation="border" /></Container>;
   }
 
-  // Si no eres admin o no estás autenticado, no muestres nada (la protección ya la hace AdminRoute)
-  if (!isAdminAuthenticated || !adminPermissions) {
-    return null;
-  }
+  const commonFormFields = (data, handler, formType) => (
+    <>
+      <Row>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Nombre(s) *</Form.Label><Form.Control type="text" name="firstName" value={data.firstName} onChange={e => handler(e, formType)} /></Form.Group></Col>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Apellido(s) *</Form.Label><Form.Control type="text" name="lastName" value={data.lastName} onChange={e => handler(e, formType)} /></Form.Group></Col>
+      </Row>
+      <Row>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Partido Político *</Form.Label><Form.Control type="text" name="party" value={data.party} onChange={e => handler(e, formType)} /></Form.Group></Col>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Cargo al que Aspira *</Form.Label><Form.Control type="text" name="officeSought" value={data.officeSought} onChange={e => handler(e, formType)} placeholder="Ej: Alcalde, Presidente"/></Form.Group></Col>
+      </Row>
+      <Form.Group className="mb-3"><Form.Label>Wallet Address</Form.Label><Form.Control type="text" name="walletAddress" value={data.walletAddress} onChange={e => handler(e, formType)} /></Form.Group>
+      <Form.Group className="mb-3"><Form.Label>URL de Foto</Form.Label><Form.Control type="text" name="photoUrl" value={data.photoUrl} onChange={e => handler(e, formType)} /></Form.Group>
+      {data.photoUrl && <div className="mb-3"><Image src={data.photoUrl} alt="Preview" thumbnail width={100} /></div>}
+      <Form.Group className="mb-3"><Form.Label>Biografía</Form.Label><Form.Control as="textarea" rows={3} name="biography" value={data.biography} onChange={e => handler(e, formType)} /></Form.Group>
+      <Form.Group className="mb-3"><Form.Label>Propuestas</Form.Label><Form.Control as="textarea" rows={3} name="proposals" value={data.proposals} onChange={e => handler(e, formType)} /></Form.Group>
+      <Row>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Provincia</Form.Label><Form.Control type="text" name="province" value={data.province} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.level === 'presidencial'} /></Form.Group></Col>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Municipio</Form.Label><Form.Control type="text" name="municipality" value={data.municipality} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.level !== 'municipal'} /></Form.Group></Col>
+      </Row>
+    </>
+  );
 
   return (
-    <Container>
-      <h2 className="mb-4">Gestión de Candidatos</h2>
-      <Card className="shadow-sm mb-4">
+    <Container fluid className="mt-0 pt-0"> {/* Changed from p-4 to mt-0 pt-0 to align with dashboard style */}
+      <Card className="shadow-sm">
+        <Card.Header as="h5">Gestión de Candidatos</Card.Header>
         <Card.Body>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Seleccione la elección</Form.Label>
-                <Form.Select
-                  value={selectedElection}
-                  onChange={e => setSelectedElection(e.target.value)}
-                  disabled={loading || elections.length === 0}
-                >
-                  {elections.length === 0 && <option value="">No hay elecciones</option>}
-                  {elections.map(e => (
-                    <option key={e._id} value={e._id}>
-                      {e.title} ({new Date(e.startTime * 1000).toLocaleDateString()} - {new Date(e.endTime * 1000).toLocaleDateString()})
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6} className="d-flex align-items-end justify-content-end">
-              <Button variant="success" onClick={() => setShowAddModal(true)} disabled={!selectedElection}>
-                <i className="fas fa-plus me-2"></i> Nuevo Candidato
-              </Button>
-            </Col>
-          </Row>
-          <Row className="mb-3">
-            <Col md={6}>
-              <InputGroup>
-                <InputGroup.Text>
-                  <i className="fas fa-search"></i>
-                </InputGroup.Text>
-                <Form.Control
-                  type="text"
-                  placeholder="Buscar candidato por nombre, partido o dirección"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
+          <Form.Group className="mb-3">
+            <Form.Label>Seleccione una Elección</Form.Label>
+            <Form.Select value={selectedElectionId} onChange={e => setSelectedElectionId(e.target.value)} disabled={elections.length === 0}>
+              <option value="">-- Seleccionar Elección --</option>
+              {elections.map(el => (
+                <option key={el._id} value={el._id}>{el.title} ({renderElectionLevel(el)})</option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+
+          {selectedElectionId && (
+            <>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  Nivel Electoral: <strong>{selectedElectionObject ? renderElectionLevel(selectedElectionObject) : 'N/A'}</strong>
+                  {isCurrentElectionActive && <Badge bg="warning" className="ms-2">Elección Activa (Edición Limitada)</Badge>}
+                </div>
+                <Button variant="primary" onClick={openAddModal} disabled={actionLoading}>
+                  <i className="fas fa-plus me-2"></i> Agregar Candidato
+                </Button>
+              </div>
+              <InputGroup className="mb-3">
+                <Form.Control placeholder="Buscar candidato..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <Button variant="outline-secondary" onClick={() => setSearchTerm('')}>Limpiar</Button>
               </InputGroup>
-            </Col>
-          </Row>
-          {error && <Alert variant="danger">{error}</Alert>}
-          <div className="table-responsive">
-            <Table striped hover>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Imagen</th>
-                  <th>Nombre</th>
-                  <th>Partido</th>
-                  <th>Wallet</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCandidates.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-3">
-                      No hay candidatos registrados
-                    </td>
-                  </tr>
-                ) : (
-                  filteredCandidates.map((candidate, idx) => (
-                    <tr key={candidate._id}>
-                      <td>{idx + 1}</td>
-                      <td>
-                        {candidate.imageUrl ? (
-                          <Image src={candidate.imageUrl} alt="Foto" rounded width={48} height={48} style={{ objectFit: 'cover' }} />
-                        ) : (
-                          <span className="text-muted">Sin imagen</span>
-                        )}
-                      </td>
-                      <td>{candidate.firstName} {candidate.lastName}</td>
-                      <td>{candidate.party}</td>
-                      <td>
-                        <span style={{ fontSize: 12 }}>{candidate.walletAddress}</span>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="p-0 ms-2"
-                          onClick={() => {
-                            navigator.clipboard.writeText(candidate.walletAddress);
-                            toast.info('Dirección copiada');
-                          }}
-                        >
-                          <i className="fas fa-copy"></i>
-                        </Button>
-                      </td>
-                      <td>
-                        <Button
-                          variant="outline-danger"
-                          size="sm"
-                          onClick={() => openRemoveModal(candidate)}
-                        >
-                          <i className="fas fa-trash-alt"></i>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </div>
-        </Card.Body>
-      </Card>
-      {/* Modal para agregar candidato */}
-      <Modal show={showAddModal} onHide={() => !actionLoading && setShowAddModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Nuevo Candidato</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Nombre</Form.Label>
-              <Form.Control
-                type="text"
-                value={newCandidate.firstName}
-                onChange={e => setNewCandidate({ ...newCandidate, firstName: e.target.value })}
-                placeholder="Nombre"
-                disabled={actionLoading}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Apellido</Form.Label>
-              <Form.Control
-                type="text"
-                value={newCandidate.lastName}
-                onChange={e => setNewCandidate({ ...newCandidate, lastName: e.target.value })}
-                placeholder="Apellido"
-                disabled={actionLoading}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Partido Político</Form.Label>
-              <Form.Control
-                type="text"
-                value={newCandidate.party}
-                onChange={e => setNewCandidate({ ...newCandidate, party: e.target.value })}
-                placeholder="Partido"
-                disabled={actionLoading}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Wallet Address</Form.Label>
-              <Form.Control
-                type="text"
-                value={newCandidate.walletAddress}
-                onChange={e => setNewCandidate({ ...newCandidate, walletAddress: e.target.value })}
-                placeholder="0x..."
-                disabled={actionLoading}
-              />
-              <Form.Text className="text-muted">Debe ser una dirección Ethereum válida.</Form.Text>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Imagen (URL)</Form.Label>
-              <Form.Control
-                type="url"
-                value={newCandidate.imageUrl}
-                onChange={e => setNewCandidate({ ...newCandidate, imageUrl: e.target.value })}
-                placeholder="https://imagen-del-candidato.com/foto.jpg"
-                disabled={actionLoading}
-              />
-              {imagePreview && (
-                <div className="mt-2">
-                  <Image src={imagePreview} alt="Vista previa" rounded width={80} height={80} style={{ objectFit: 'cover' }} />
+
+              {loadingCandidates ? <div className="text-center"><Spinner animation="border" /></div> :
+                error ? <Alert variant="danger">{error}</Alert> :
+                filteredCandidates.length === 0 ? <Alert variant="info">No hay candidatos para esta elección o filtro.</Alert> : (
+                <div className="table-responsive">
+                  <Table striped bordered hover size="sm">
+                    <thead><tr>
+                      <th>Foto</th><th>Nombre</th><th>Partido</th><th>Cargo</th>
+                      <th>Provincia</th><th>Municipio</th><th>Estado</th><th>Acciones</th>
+                    </tr></thead>
+                    <tbody>
+                      {filteredCandidates.map(cand => (
+                        <tr key={cand._id}>
+                          <td>{cand.photoUrl ? <Image src={cand.photoUrl} alt={cand.firstName} rounded width={40} height={40} style={{objectFit: 'cover'}}/> : 'N/A'}</td>
+                          <td>{cand.firstName} {cand.lastName}</td>
+                          <td>{cand.party}</td>
+                          <td>{cand.officeSought}</td>
+                          <td>{cand.province || 'N/A'}</td>
+                          <td>{cand.municipality || 'N/A'}</td>
+                          <td>
+                            <Badge bg={cand.isActive ? "success" : "secondary"}>
+                              {cand.isActive ? "Activo" : "Inactivo"}
+                            </Badge>
+                          </td>
+                          <td>
+                            <Button variant="outline-primary" size="sm" className="me-1" onClick={() => openEditModal(cand)} disabled={isCurrentElectionActive || actionLoading || statusToggleLoading[cand._id]}>
+                              <i className="fas fa-edit"></i>
+                            </Button>
+                            <Button variant={cand.isActive ? "outline-warning" : "outline-success"} size="sm" className="me-1"
+                              onClick={() => handleToggleActiveStatus(cand._id, cand.isActive)}
+                              disabled={actionLoading || statusToggleLoading[cand._id]}>
+                              {statusToggleLoading[cand._id] ? <Spinner animation="border" size="sm" /> : (cand.isActive ? <i className="fas fa-times-circle"></i> : <i className="fas fa-check-circle"></i>)}
+                            </Button>
+                            <Button variant="outline-danger" size="sm" onClick={() => openDeleteModal(cand)} disabled={isCurrentElectionActive || actionLoading || statusToggleLoading[cand._id]}>
+                              <i className="fas fa-trash-alt"></i>
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
                 </div>
               )}
-            </Form.Group>
-          </Form>
-        </Modal.Body>
+            </>
+          )}
+        </Card.Body>
+      </Card>
+
+      {/* Add Candidate Modal */}
+      <Modal show={showAddModal} onHide={() => !actionLoading && setShowAddModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Agregar Nuevo Candidato</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{commonFormFields(newCandidateData, handleInputChange, 'add')}</Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={actionLoading}>
-            Cancelar
-          </Button>
-          <Button variant="success" onClick={handleAddCandidate} disabled={actionLoading}>
-            {actionLoading ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Procesando...
-              </>
-            ) : (
-              'Agregar'
-            )}
+          <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={actionLoading}>Cancelar</Button>
+          <Button variant="primary" onClick={handleAddCandidate} disabled={actionLoading}>
+            {actionLoading ? <Spinner as="span" animation="border" size="sm" /> : "Agregar Candidato"}
           </Button>
         </Modal.Footer>
       </Modal>
-      {/* Modal de confirmación de eliminación */}
-      <Modal show={showRemoveModal} onHide={() => !actionLoading && setShowRemoveModal(false)} centered>
+
+      {/* Edit Candidate Modal */}
+      <Modal show={showEditModal} onHide={() => !actionLoading && setShowEditModal(false)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Eliminar Candidato</Modal.Title>
+          <Modal.Title>Editar Candidato: {editingCandidate?.firstName} {editingCandidate?.lastName}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{commonFormFields(editCandidateData, handleInputChange, 'edit')}</Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEditModal(false)} disabled={actionLoading}>Cancelar</Button>
+          <Button variant="primary" onClick={handleEditCandidate} disabled={actionLoading || (isCurrentElectionActive && !(editCandidateData.isActive !== editingCandidate?.isActive && Object.keys(editCandidateData).length === 1)) /* Allow if only isActive is changing */ }>
+            {actionLoading ? <Spinner as="span" animation="border" size="sm" /> : "Guardar Cambios"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal show={showDeleteModal} onHide={() => !actionLoading && setShowDeleteModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar Eliminación</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          ¿Seguro que deseas eliminar a este candidato?
-          <div className="bg-light p-2 rounded mt-2">
-            <strong>{candidateToRemove?.firstName} {candidateToRemove?.lastName}</strong>
-            <br />
-            <span style={{ fontSize: 12 }}>{candidateToRemove?.walletAddress}</span>
-          </div>
+          ¿Está seguro que desea eliminar al candidato <strong>{candidateToDelete?.firstName} {candidateToDelete?.lastName}</strong>?
+          {isCurrentElectionActive && <Alert variant="warning" className="mt-2">Esta elección está activa. La eliminación está deshabilitada.</Alert>}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowRemoveModal(false)} disabled={actionLoading}>
-            Cancelar
-          </Button>
-          <Button variant="danger" onClick={handleRemoveCandidate} disabled={actionLoading}>
-            {actionLoading ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Eliminando...
-              </>
-            ) : (
-              'Eliminar'
-            )}
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>Cancelar</Button>
+          <Button variant="danger" onClick={handleDeleteCandidate} disabled={actionLoading || isCurrentElectionActive}>
+            {actionLoading ? <Spinner as="span" animation="border" size="sm" /> : "Eliminar"}
           </Button>
         </Modal.Footer>
       </Modal>
