@@ -308,6 +308,10 @@ const AdminDashboard = () => {
             </tbody>
           </Table>
         </Tab>
+        <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
+        <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
+        <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
+        <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
         <Tab eventKey="candidates" title="Gestionar Candidatos">
           <ManageCandidates
             isElectionActive={isElectionActive}
@@ -315,9 +319,6 @@ const AdminDashboard = () => {
             allElections={elections}
           />
         </Tab>
-        <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
-        <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
-      </Tabs>
 
       {/* Create Election Modal */}
       <Modal show={showCreateElectionModal} onHide={() => setShowCreateElectionModal(false)}>
