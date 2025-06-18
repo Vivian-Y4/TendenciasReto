@@ -38,9 +38,6 @@ function accionEnEspanol(action) {
 }
 
 const AdminDashboard = () => {
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [activityError, setActivityError] = useState("");
   const [elections, setElections] = useState([]);
   const [voterStats, setVoterStats] = useState({ totalRegistered: 0, totalVoted: 0 });
   const [loading, setLoading] = useState(true);
@@ -75,20 +72,6 @@ const AdminDashboard = () => {
   const canCreateElection = adminPermissions?.canCreateElection;
   const canManageElections = adminPermissions?.canManageElections;
   const canFinalizeResults = adminPermissions?.canFinalizeResults;
-
-  const fetchActivityLogs = useCallback(async () => {
-    if (!adminPermissions?.canViewActivity) return;
-    setActivityLoading(true);
-    try {
-      const token = localStorage.getItem("adminToken");
-      const res = await axios.get("/api/admin/activity?limit=5", { headers: { 'x-auth-token': token } });
-      setActivityLogs(Array.isArray(res.data.data) ? res.data.data : []);
-    } catch (error) {
-      setActivityError("No se pudo cargar la actividad reciente");
-    } finally {
-      setActivityLoading(false);
-    }
-  }, [adminPermissions]);
 
   const fetchElections = useCallback(async () => {
     try {
@@ -126,10 +109,10 @@ const AdminDashboard = () => {
       return;
     }
     setLoading(true);
-    Promise.all([fetchElections(), fetchVoterStats(), fetchUsers(), fetchActivityLogs()])
+    Promise.all([fetchElections(), fetchVoterStats(), fetchUsers()])
       .catch(e => console.error("Failed to load initial data:", e))
       .finally(() => setLoading(false));
-  }, [isAdminAuthenticated, navigate, fetchElections, fetchVoterStats, fetchUsers, fetchActivityLogs]);
+  }, [isAdminAuthenticated, navigate, fetchElections, fetchVoterStats, fetchUsers]);
 
   const handleCreateElection = async () => {
     if (!newElectionTitle || !newElectionDescription || !newElectionStartDate || !newElectionEndDate || !newElectionStartTime || !newElectionEndTime || !newElectionLevel) {
@@ -326,24 +309,6 @@ const AdminDashboard = () => {
         </Tab>
         <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
         <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
-        <Tab eventKey="activity" title="Actividad Reciente">
-          {activityLoading ? <Spinner animation="border" /> :
-            activityError ? <Alert variant="danger">{activityError}</Alert> : (
-            <Table striped bordered hover responsive>
-              <thead><tr><th>Timestamp</th><th>Usuario</th><th>Acción</th><th>Detalles</th></tr></thead>
-              <tbody>
-                {activityLogs.map(log => (
-                  <tr key={log._id}>
-                    <td>{formatTimestamp(log.timestamp)}</td>
-                    <td>{log.admin_id?.username || 'Sistema'}</td>
-                    <td>{accionEnEspanol(log.action)}</td>
-                    <td><pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(log.details, null, 2)}</pre></td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Tab>
       </Tabs>
 
       {/* Create Election Modal */}
