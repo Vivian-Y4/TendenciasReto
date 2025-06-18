@@ -29,8 +29,8 @@ const createCandidate = async (req, res, next) => {
       isActive,
       // New fields:
       proposals,
-      province,
-      municipality,
+      // province, // Removed
+      // municipality, // Removed
       officeSought // Descriptive name of the position/role
     } = req.body;
 
@@ -76,8 +76,8 @@ const createCandidate = async (req, res, next) => {
       isActive: isActive !== undefined ? isActive : true,
       // New fields:
       proposals,
-      province,
-      municipality,
+      // province, // Removed
+      // municipality, // Removed
       officeSought
     };
 
@@ -258,8 +258,8 @@ const updateCandidate = async (req, res, next) => {
       isActive,
       // New fields for update:
       proposals,
-      province,
-      municipality,
+      // province, // Removed
+      // municipality, // Removed
       officeSought
     } = req.body;
 
@@ -283,7 +283,7 @@ const updateCandidate = async (req, res, next) => {
           'firstName', 'lastName', 'party', 'biography', 'manifesto',
           'categoryId', 'position', 'walletAddress', 'electionId', // electionId shouldn't change anyway
           // Add new fields to forbidden list for active election
-          'proposals', 'province', 'municipality', 'officeSought'
+          'proposals', 'officeSought' // Removed province, municipality
         ];
 
         if (req.file) { // Photo update is forbidden during active election
@@ -345,8 +345,8 @@ const updateCandidate = async (req, res, next) => {
 
     // New fields - only update if election is not active (logic for this is above)
     if (proposals !== undefined) candidateToUpdate.proposals = proposals;
-    if (province !== undefined) candidateToUpdate.province = province;
-    if (municipality !== undefined) candidateToUpdate.municipality = municipality;
+    // if (province !== undefined) candidateToUpdate.province = province; // Removed
+    // if (municipality !== undefined) candidateToUpdate.municipality = municipality; // Removed
     if (officeSought !== undefined) candidateToUpdate.officeSought = officeSought;
 
     // isActive is always allowed to be updated

@@ -131,14 +131,6 @@ const candidateSchema = new Schema({
   proposals: { // New field
     type: String
   },
-  province: { // New field
-    type: String,
-    trim: true
-  },
-  municipality: { // New field
-    type: String,
-    trim: true
-  },
   officeSought: { // New field for the role/position name
     type: String,
     trim: true

@@ -282,11 +282,13 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
     return election.electoralLevel;
   };
 
-  if (!isAdminAuthenticated) { // Optional: Could be handled by AdminRoute higher up
-    return <Alert variant="danger">Acceso denegado. Debe iniciar sesión como administrador.</Alert>;
+  if (!isAdminAuthenticated) {
+    console.log("ManageCandidates: Not authenticated, returning simple div.");
+    return (<div>ManageCandidates: Not Authenticated.</div>);
   }
   if (loadingElections) {
-    return <Container className="text-center mt-5"><Spinner animation="border" /></Container>;
+    console.log("ManageCandidates: Loading elections, returning simple div.");
+    return (<div>ManageCandidates: Loading Elections...</div>);
   }
 
   const commonFormFields = (data, handler, formType) => (

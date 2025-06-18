@@ -68,4 +68,12 @@ router.get('/stats', adminAuth, adminVoterAdditional.getVoterStats);
  */
 router.post('/elections/:electionId/assign-voters', adminAuth, adminVoterAdditional.assignVotersToElection);
 
+// GET /api/admin/voters/by-province/:province
+// Fetches voters by province
+router.get('/by-province/:province', adminAuth, adminVoterController.getVotersByProvince);
+
+// GET /api/admin/voters/all-wallets
+// Fetches all voters with wallet addresses
+router.get('/all-wallets', adminAuth, adminVoterController.getAllVotersWithWallets);
+
 module.exports = router;

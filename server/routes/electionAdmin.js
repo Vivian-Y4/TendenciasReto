@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const electionAdminController = require('../controllers/electionAdminController');
+const candidateAdminController = require('../controllers/candidateAdminController'); // Added
 const adminAuth = require('../middlewares/adminAuth');
 
 /**
@@ -44,6 +45,13 @@ router.post('/contract/verifier', adminAuth, electionAdminController.setVerifier
  * @access  Privado (Admin)
  */
 router.post('/:electionId/merkle-root', adminAuth, electionAdminController.setElectionMerkleRoot);
+
+/**
+ * @route   GET /api/admin/elections/:electionId/candidates
+ * @desc    Obtener candidatos por elección
+ * @access  Privado (Admin)
+ */
+router.get('/:electionId/candidates', adminAuth, candidateAdminController.getCandidatesByElection);
 
 
 // --- Commenting out routes for functions that are currently stubbed or too complex for this subtask ---
