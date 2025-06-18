@@ -68,4 +68,8 @@ router.get('/stats', adminAuth, adminVoterAdditional.getVoterStats);
  */
 router.post('/elections/:electionId/assign-voters', adminAuth, adminVoterAdditional.assignVotersToElection);
 
+// GET /api/admin/voters/by-province/:province
+// Fetches voters by province
+router.get('/by-province/:province', adminAuth, adminVoterController.getVotersByProvince);
+
 module.exports = router;

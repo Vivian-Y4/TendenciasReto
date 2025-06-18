@@ -24,6 +24,7 @@ import axios from "axios";
 import AssignTokens from './AssignTokens';
 import ManageCandidates from './ManageCandidates'; // Ensure this import is correct
 import { PROVINCES } from '../../constants/provinces'; // Adjust path if necessary
+import deploymentInfo from "../../../../deployment-info.json";
 
 // Helper function for translations (if used)
 // function accionEnEspanol(action) { ... }
@@ -38,6 +39,7 @@ const AdminDashboard = () => {
   const { isAdminAuthenticated, adminPermissions, adminLogout } = useContext(AdminContext);
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
+  const tokenAddressFromDeployment = deploymentInfo.tokenAddress;
   
   // State for Create Election Modal
   const [showCreateElectionModal, setShowCreateElectionModal] = useState(false);
@@ -329,7 +331,7 @@ const AdminDashboard = () => {
           <StatsDashboard />
         </Tab>
         <Tab eventKey="assignTokens" title="Asignar Tokens">
-          <AssignTokens users={users} />
+          <AssignTokens users={users} tokenAddress={tokenAddressFromDeployment} />
         </Tab>
       </Tabs>
 
