@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
-  Container, Card, Table, Form, Button, Alert, Spinner, Modal, Row, Col, Badge, InputGroup
+  Container, Card, Table, Form, Button, Alert, Spinner, Modal, Row, Col, Badge, InputGroup, Image
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import AdminContext from '../../context/AdminContext'; // Assuming this context provides auth/permissions
@@ -31,7 +31,6 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
     lastName: '',
     party: '',
     officeSought: '', // e.g., "Alcalde", "Presidente"
-    walletAddress: '',
     photoUrl: '',
     biography: '',
     proposals: '',
@@ -59,21 +58,23 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Error al cargar elecciones');
       setElections(data.elections || data.data || []);
-      // Try to pre-select the first election if available
-      if (data.elections && data.elections.length > 0 && !selectedElectionId) {
-         // setSelectedElectionId(data.elections[0]._id); // Auto-select first election
-      }
     } catch (err) {
       setError(err.message || 'Error al cargar elecciones');
       toast.error(err.message || 'Error al cargar elecciones');
     } finally {
       setLoadingElections(false);
     }
-  }, [isAdminAuthenticated, selectedElectionId]); // Added selectedElectionId to dependencies
+  }, [isAdminAuthenticated]);
 
   useEffect(() => {
-    fetchElections();
-  }, [fetchElections]);
+    // Use elections from props if available, otherwise fetch them.
+    if (allElectionsFromDashboard && allElectionsFromDashboard.length > 0) {
+      setElections(allElectionsFromDashboard);
+      setLoadingElections(false);
+    } else {
+      fetchElections();
+    }
+  }, [allElectionsFromDashboard, fetchElections]);
 
   // Fetch candidates when an election is selected
   const fetchCandidatesForElection = useCallback(async () => {
@@ -85,7 +86,7 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
     setError('');
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`${API_BASE_URL}/api/admin/elections/${selectedElectionId}/candidates`, {
+            const res = await fetch(`${API_BASE_URL}/api/admin/candidates?electionId=${selectedElectionId}`, {
         headers: { 'x-auth-token': token }
       });
       const data = await res.json();
@@ -107,20 +108,17 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
   }, [fetchCandidatesForElection]);
 
   useEffect(() => {
-    if (selectedElectionId && allElectionsFromDashboard && typeof isElectionActiveProp === 'function') {
-        const currentFullElection = allElectionsFromDashboard.find(e => e._id === selectedElectionId);
-        setSelectedElectionObject(currentFullElection || null);
-        setIsCurrentElectionActive(currentFullElection ? isElectionActiveProp(currentFullElection) : false);
-    } else if (selectedElectionId && elections.length > 0 && typeof isElectionActiveProp === 'function') {
-        // Fallback to locally fetched elections if dashboard prop not ready (though less ideal for status)
-        const currentFullElection = elections.find(e => e._id === selectedElectionId);
-        setSelectedElectionObject(currentFullElection || null);
-        setIsCurrentElectionActive(currentFullElection ? isElectionActiveProp(currentFullElection) : false);
+    if (selectedElectionId && elections.length > 0) {
+      const currentElection = elections.find(e => e._id === selectedElectionId);
+      setSelectedElectionObject(currentElection || null);
+      if (typeof isElectionActiveProp === 'function') {
+        setIsCurrentElectionActive(currentElection ? isElectionActiveProp(currentElection) : false);
+      }
     } else {
-        setSelectedElectionObject(null);
-        setIsCurrentElectionActive(false);
+      setSelectedElectionObject(null);
+      setIsCurrentElectionActive(false);
     }
-  }, [selectedElectionId, allElectionsFromDashboard, elections, isElectionActiveProp]);
+  }, [selectedElectionId, elections, isElectionActiveProp]);
 
 
   const handleInputChange = (e, formType) => {
@@ -135,9 +133,9 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
   const openAddModal = () => {
     setNewCandidateData({ // Reset form
       firstName: '', lastName: '', party: '', officeSought: '',
-      walletAddress: '', photoUrl: '', biography: '', proposals: '',
-      province: selectedElectionObject?.level === 'presidencial' ? '' : selectedElectionObject?.province || '',
-      municipality: selectedElectionObject?.level === 'municipal' ? selectedElectionObject?.municipality || '' : '',
+      photoUrl: '', biography: '', proposals: '',
+      province: selectedElectionObject?.electoralLevel === 'Presidencial' ? '' : selectedElectionObject?.province || '',
+      municipality: selectedElectionObject?.electoralLevel === 'Municipal' ? selectedElectionObject?.municipality || '' : '',
     });
     setShowAddModal(true);
   };
@@ -181,7 +179,6 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
       lastName: candidate.lastName || '',
       party: candidate.party || '',
       officeSought: candidate.officeSought || '',
-      walletAddress: candidate.walletAddress || '',
       photoUrl: candidate.photoUrl || '',
       biography: candidate.biography || '',
       proposals: candidate.proposals || '',
@@ -276,20 +273,13 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
       candidate.firstName?.toLowerCase().includes(searchLower) ||
       candidate.lastName?.toLowerCase().includes(searchLower) ||
       candidate.party?.toLowerCase().includes(searchLower) ||
-      candidate.officeSought?.toLowerCase().includes(searchLower) ||
-      candidate.walletAddress?.toLowerCase().includes(searchLower)
+      candidate.officeSought?.toLowerCase().includes(searchLower)
     );
   });
 
   const renderElectionLevel = (election) => {
-    if (!election || !election.level) return 'N/A';
-    const levelMap = {
-      presidencial: 'Presidencial',
-      senatorial: 'Senatorial',
-      diputados: 'Diputados',
-      municipal: 'Municipal',
-    };
-    return levelMap[election.level.toLowerCase()] || election.level;
+    if (!election || !election.electoralLevel) return 'N/A';
+    return election.electoralLevel;
   };
 
   if (!isAdminAuthenticated) { // Optional: Could be handled by AdminRoute higher up
@@ -309,14 +299,14 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
         <Col md={6}><Form.Group className="mb-3"><Form.Label>Partido Político *</Form.Label><Form.Control type="text" name="party" value={data.party} onChange={e => handler(e, formType)} /></Form.Group></Col>
         <Col md={6}><Form.Group className="mb-3"><Form.Label>Cargo al que Aspira *</Form.Label><Form.Control type="text" name="officeSought" value={data.officeSought} onChange={e => handler(e, formType)} placeholder="Ej: Alcalde, Presidente"/></Form.Group></Col>
       </Row>
-      <Form.Group className="mb-3"><Form.Label>Wallet Address</Form.Label><Form.Control type="text" name="walletAddress" value={data.walletAddress} onChange={e => handler(e, formType)} /></Form.Group>
+
       <Form.Group className="mb-3"><Form.Label>URL de Foto</Form.Label><Form.Control type="text" name="photoUrl" value={data.photoUrl} onChange={e => handler(e, formType)} /></Form.Group>
-      {data.photoUrl && <div className="mb-3"><Image src={data.photoUrl} alt="Preview" thumbnail width={100} /></div>}
+      {/* {data.photoUrl && <div className="mb-3"><Image src={data.photoUrl} alt="Preview" thumbnail width={100} /></div>} */}
       <Form.Group className="mb-3"><Form.Label>Biografía</Form.Label><Form.Control as="textarea" rows={3} name="biography" value={data.biography} onChange={e => handler(e, formType)} /></Form.Group>
       <Form.Group className="mb-3"><Form.Label>Propuestas</Form.Label><Form.Control as="textarea" rows={3} name="proposals" value={data.proposals} onChange={e => handler(e, formType)} /></Form.Group>
       <Row>
-        <Col md={6}><Form.Group className="mb-3"><Form.Label>Provincia</Form.Label><Form.Control type="text" name="province" value={data.province} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.level === 'presidencial'} /></Form.Group></Col>
-        <Col md={6}><Form.Group className="mb-3"><Form.Label>Municipio</Form.Label><Form.Control type="text" name="municipality" value={data.municipality} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.level !== 'municipal'} /></Form.Group></Col>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Provincia</Form.Label><Form.Control type="text" name="province" value={data.province} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.electoralLevel === 'Presidencial'} /></Form.Group></Col>
+        <Col md={6}><Form.Group className="mb-3"><Form.Label>Municipio</Form.Label><Form.Control type="text" name="municipality" value={data.municipality} onChange={e => handler(e, formType)} disabled={selectedElectionObject?.electoralLevel !== 'Municipal'} /></Form.Group></Col>
       </Row>
     </>
   );
@@ -331,7 +321,7 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
             <Form.Select value={selectedElectionId} onChange={e => setSelectedElectionId(e.target.value)} disabled={elections.length === 0}>
               <option value="">-- Seleccionar Elección --</option>
               {elections.map(el => (
-                <option key={el._id} value={el._id}>{el.title} ({renderElectionLevel(el)})</option>
+                <option key={el._id} value={el._id}>{el.title}</option>
               ))}
             </Form.Select>
           </Form.Group>
@@ -364,7 +354,7 @@ const ManageCandidates = ({ isElectionActive: isElectionActiveProp, hasElectionE
                     <tbody>
                       {filteredCandidates.map(cand => (
                         <tr key={cand._id}>
-                          <td>{cand.photoUrl ? <Image src={cand.photoUrl} alt={cand.firstName} rounded width={40} height={40} style={{objectFit: 'cover'}}/> : 'N/A'}</td>
+                                                    <td>{cand.photoUrl ? <Image src={`${API_BASE_URL}${cand.photoUrl}`} alt={cand.firstName} rounded width={40} height={40} style={{objectFit: 'cover'}}/> : 'N/A'}</td>
                           <td>{cand.firstName} {cand.lastName}</td>
                           <td>{cand.party}</td>
                           <td>{cand.officeSought}</td>

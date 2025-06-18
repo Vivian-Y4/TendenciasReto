@@ -13,7 +13,7 @@ const CreateElection = () => {
     startTime: '',
     endDate: '',
     endTime: '',
-    level: '',
+    electoralLevel: '',
     province: ''
   });
 
@@ -55,11 +55,11 @@ const CreateElection = () => {
       setError('End date and time are required');
       return false;
     }
-    if (!formData.level) {
+    if (!formData.electoralLevel) {
       setError('Election level is required');
       return false;
     }
-    if (["municipal","senatorial","diputados"].includes((formData.level||'').toLowerCase()) && !formData.province) {
+    if (["Municipal","Congresual"].includes(formData.electoralLevel) && !formData.province) {
       setError('Debe seleccionar una provincia para elecciones regionales o municipales');
       return false;
     }
@@ -100,8 +100,8 @@ const CreateElection = () => {
             description: formData.description.trim(),
             startTime: startTimestamp,
             endTime: endTimestamp,
-            level: formData.level,
-            province: (formData.level === 'municipal' || formData.level === 'senatorial' || formData.level === 'diputados') ? formData.province : undefined
+            electoralLevel: formData.electoralLevel,
+            province: (formData.electoralLevel === 'Municipal' || formData.electoralLevel === 'Congresual') ? formData.province : undefined
           })
         }
       );
@@ -215,25 +215,24 @@ const CreateElection = () => {
             </Row>
             <Row className="mb-4">
               <Col md={12}>
-                <Form.Group controlId="level">
+                <Form.Group controlId="electoralLevel">
                   <Form.Label>Nivel de la Elección</Form.Label>
                   <Form.Control
                     as="select"
-                    name="level"
-                    value={formData.level}
+                    name="electoralLevel"
+                    value={formData.electoralLevel}
                     onChange={handleInputChange}
                     required
                   >
                     <option value="">Seleccione el nivel</option>
-                    <option value="presidencial">Presidencial</option>
-                    <option value="senatorial">Senatorial</option>
-                    <option value="diputados">Diputados</option>
-                    <option value="municipal">Municipal</option>
+                    <option value="Presidencial">Presidencial</option>
+                    <option value="Congresual">Congresual</option>
+                    <option value="Municipal">Municipal</option>
                   </Form.Control>
                 </Form.Group>
               </Col>
             </Row>
-            {['municipal','senatorial','diputados'].includes(formData.level?.toLowerCase()?.trim()) && (
+            {['Municipal','Congresual'].includes(formData.electoralLevel) && (
               <Row className="mb-4">
                 <Col md={12}>
                   <Form.Group controlId="province">

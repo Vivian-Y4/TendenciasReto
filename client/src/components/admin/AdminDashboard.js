@@ -23,6 +23,7 @@ import StatsDashboard from "./stats/StatsDashboard";
 import axios from "axios";
 import AssignTokens from './AssignTokens';
 import ManageCandidates from './ManageCandidates';
+import { PROVINCES } from '../../constants/provinces';
 
 // Helper function for translations
 function accionEnEspanol(action) {
@@ -58,6 +59,7 @@ const AdminDashboard = () => {
   const [newElectionStartTime, setNewElectionStartTime] = useState("");
   const [newElectionEndTime, setNewElectionEndTime] = useState("");
   const [newElectionLevel, setNewElectionLevel] = useState("");
+  const [newElectionProvince, setNewElectionProvince] = useState("");
 
   // State for Edit Election Modal
   const [showEditElectionModal, setShowEditElectionModal] = useState(false);
@@ -69,6 +71,7 @@ const AdminDashboard = () => {
   const [editElectionStartTime, setEditElectionStartTime] = useState("");
   const [editElectionEndTime, setEditElectionEndTime] = useState("");
   const [editElectionLevel, setEditElectionLevel] = useState("");
+  const [editElectionProvince, setEditElectionProvince] = useState("");
 
   const canCreateElection = adminPermissions?.canCreateElection;
   const canManageElections = adminPermissions?.canManageElections;
@@ -129,8 +132,8 @@ const AdminDashboard = () => {
         description: newElectionDescription.trim(),
         startDate: new Date(`${newElectionStartDate}T${newElectionStartTime}`).toISOString(),
         endDate: new Date(`${newElectionEndDate}T${newElectionEndTime}`).toISOString(),
-        level: newElectionLevel.toLowerCase(),
-        votingAddress: process.env.REACT_APP_VOTING_ADDRESS, // Example of using env var
+        electoralLevel: newElectionLevel,
+        province: ['Congresual', 'Municipal'].includes(newElectionLevel) ? newElectionProvince : undefined
       };
       await axios.post("/api/admin/elections", payload, { headers: { "x-auth-token": token } });
       toast.success("Elección creada correctamente");
@@ -143,6 +146,7 @@ const AdminDashboard = () => {
       setNewElectionStartTime("");
       setNewElectionEndTime("");
       setNewElectionLevel("");
+      setNewElectionProvince("");
       fetchElections(); // Refresh list
     } catch (error) {
       toast.error(error.response?.data?.message || "Error al crear la elección");
@@ -188,13 +192,14 @@ const AdminDashboard = () => {
     setEditElectionEndDate(endObj.toISOString().split("T")[0]);
     setEditElectionEndTime(endObj.toTimeString().substring(0, 5));
 
-    setEditElectionLevel(election.level ?? "");
+    setEditElectionLevel(election.electoralLevel ?? "");
+    setEditElectionProvince(election.province ?? "");
     setShowEditElectionModal(true);
   };
 
   const handleUpdateElection = async () => {
-    if (!editElectionTitle || !editElectionDescription || !editElectionStartDate || !editElectionEndDate || !editElectionStartTime || !editElectionEndTime || !editElectionLevel) {
-      toast.error("Por favor completa todos los campos.");
+    if (!editElectionTitle || !editElectionDescription || !editElectionStartDate || !editElectionEndDate || !editElectionStartTime || !editElectionEndTime || !editElectionLevel || (['Congresual', 'Municipal'].includes(editElectionLevel) && !editElectionProvince)) {
+      toast.error("Por favor completa todos los campos, incluyendo la provincia si es necesario.");
       return;
     }
     setActionLoading(true);
@@ -205,7 +210,8 @@ const AdminDashboard = () => {
         description: editElectionDescription.trim(),
         startDate: new Date(`${editElectionStartDate}T${editElectionStartTime}`).toISOString(),
         endDate: new Date(`${editElectionEndDate}T${editElectionEndTime}`).toISOString(),
-        level: editElectionLevel.toLowerCase(),
+        electoralLevel: editElectionLevel,
+        province: ['Congresual', 'Municipal'].includes(editElectionLevel) ? editElectionProvince : undefined,
       };
       await axios.put(`/api/admin/elections/${editElectionId}`, payload, { headers: { "x-auth-token": token } });
       toast.success("Elección actualizada correctamente");
@@ -334,7 +340,26 @@ const AdminDashboard = () => {
               <Col><Form.Group className="mb-3" controlId="newElectionEndDate"><Form.Label>Fecha Fin</Form.Label><Form.Control type="date" value={newElectionEndDate} onChange={(e) => setNewElectionEndDate(e.target.value)} /></Form.Group></Col>
               <Col><Form.Group className="mb-3" controlId="newElectionEndTime"><Form.Label>Hora Fin</Form.Label><Form.Control type="time" value={newElectionEndTime} onChange={(e) => setNewElectionEndTime(e.target.value)} /></Form.Group></Col>
             </Row>
-            <Form.Group className="mb-3" controlId="newElectionLevel"><Form.Label>Nivel</Form.Label><Form.Select value={newElectionLevel} onChange={(e) => setNewElectionLevel(e.target.value)}><option value="">Seleccione...</option><option value="presidencial">Presidencial</option><option value="senatorial">Senatorial</option><option value="diputados">Diputados</option><option value="municipal">Municipal</option></Form.Select></Form.Group>
+            <Form.Group className="mb-3" controlId="newElectionLevel">
+              <Form.Label>Nivel Electoral</Form.Label>
+              <Form.Select value={newElectionLevel} onChange={(e) => setNewElectionLevel(e.target.value)} required>
+                <option value="">Seleccione un nivel</option>
+                <option value="Presidencial">Presidencial</option>
+                <option value="Congresual">Congresual</option>
+                <option value="Municipal">Municipal</option>
+              </Form.Select>
+            </Form.Group>
+            {['Congresual', 'Municipal'].includes(newElectionLevel) && (
+              <Form.Group className="mb-3">
+                <Form.Label>Provincia</Form.Label>
+                <Form.Select value={newElectionProvince} onChange={(e) => setNewElectionProvince(e.target.value)} required>
+                  <option value="">Seleccione una provincia</option>
+                  {PROVINCES.map(province => (
+                    <option key={province} value={province}>{province}</option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>
@@ -358,7 +383,26 @@ const AdminDashboard = () => {
               <Col><Form.Group className="mb-3" controlId="editElectionEndDate"><Form.Label>Fecha Fin</Form.Label><Form.Control type="date" value={editElectionEndDate} onChange={(e) => setEditElectionEndDate(e.target.value)} /></Form.Group></Col>
               <Col><Form.Group className="mb-3" controlId="editElectionEndTime"><Form.Label>Hora Fin</Form.Label><Form.Control type="time" value={editElectionEndTime} onChange={(e) => setEditElectionEndTime(e.target.value)} /></Form.Group></Col>
             </Row>
-            <Form.Group className="mb-3" controlId="editElectionLevel"><Form.Label>Nivel</Form.Label><Form.Select value={editElectionLevel} onChange={(e) => setEditElectionLevel(e.target.value)}><option value="">Seleccione...</option><option value="presidencial">Presidencial</option><option value="senatorial">Senatorial</option><option value="diputados">Diputados</option><option value="municipal">Municipal</option></Form.Select></Form.Group>
+            <Form.Group className="mb-3" controlId="editElectionLevel">
+              <Form.Label>Nivel Electoral</Form.Label>
+              <Form.Control as="select" value={editElectionLevel} onChange={(e) => setEditElectionLevel(e.target.value)} required>
+                <option value="">Seleccione un nivel</option>
+                <option value="Presidencial">Presidencial</option>
+                <option value="Congresual">Congresual</option>
+                <option value="Municipal">Municipal</option>
+              </Form.Control>
+            </Form.Group>
+            {['Congresual', 'Municipal'].includes(editElectionLevel) && (
+              <Form.Group className="mb-3">
+                <Form.Label>Provincia</Form.Label>
+                <Form.Control as="select" value={editElectionProvince} onChange={(e) => setEditElectionProvince(e.target.value)} required>
+                  <option value="">Seleccione una provincia</option>
+                  {PROVINCES.map(province => (
+                    <option key={province} value={province}>{province}</option>
+                  ))}
+                </Form.Control>
+              </Form.Group>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>

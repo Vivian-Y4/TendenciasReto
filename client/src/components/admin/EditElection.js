@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import AuthContext from '../../context/AuthContext';
 import { formatTimestamp } from '../../utils/contractUtils';
+import { PROVINCES } from '../../constants/provinces';
 
 const EditElection = () => {
   const { t } = useTranslation();
@@ -12,6 +13,8 @@ const EditElection = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    electoralLevel: '',
+    province: '',
     candidates: []
   });
   
@@ -59,6 +62,8 @@ const EditElection = () => {
       setFormData({
         title: election.title,
         description: election.description,
+        electoralLevel: election.electoralLevel || '',
+        province: election.province || '',
         candidates: election.candidates.map(c => ({
           id: c.id,
           name: c.name,
@@ -112,6 +117,16 @@ const EditElection = () => {
     
     if (!formData.description.trim()) {
       setError(t('admin.create_election.description_required'));
+      return false;
+    }
+
+    if (!formData.electoralLevel) {
+      setError('Debe seleccionar un nivel electoral');
+      return false;
+    }
+
+    if (['Municipal', 'Congresual'].includes(formData.electoralLevel) && !formData.province) {
+      setError('Debe seleccionar una provincia para este nivel electoral');
       return false;
     }
     
@@ -295,6 +310,50 @@ const EditElection = () => {
                 {t('admin.edit.time_note')}
               </small>
             </div>
+
+            <hr />
+
+            <h5 className="mb-3">Configuración de la Elección</h5>
+            <Row className="mb-4">
+              <Col md={12}>
+                <Form.Group controlId="electoralLevel">
+                  <Form.Label>Nivel de la Elección</Form.Label>
+                  <Form.Control
+                    as="select"
+                    name="electoralLevel"
+                    value={formData.electoralLevel}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">Seleccione el nivel</option>
+                    <option value="Presidencial">Presidencial</option>
+                    <option value="Congresual">Congresual</option>
+                    <option value="Municipal">Municipal</option>
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+            </Row>
+            {['Municipal', 'Congresual'].includes(formData.electoralLevel) && (
+              <Row className="mb-4">
+                <Col md={12}>
+                  <Form.Group controlId="province">
+                    <Form.Label>Provincia</Form.Label>
+                    <Form.Control
+                      as="select"
+                      name="province"
+                      value={formData.province}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      <option value="">Seleccione una provincia</option>
+                      {PROVINCES.map((prov) => (
+                        <option key={prov} value={prov}>{prov}</option>
+                      ))}
+                    </Form.Control>
+                  </Form.Group>
+                </Col>
+              </Row>
+            )}
             
             <hr />
             

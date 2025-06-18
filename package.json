@@ -35,6 +35,7 @@
     "keccak256": "^1.0.6",
     "merkletreejs": "^0.3.11",
     "mongoose": "^8.15.1",
+    "multer": "^2.0.1",
     "poseidon-lite": "^0.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

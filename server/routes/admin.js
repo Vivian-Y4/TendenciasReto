@@ -140,15 +140,6 @@ router.get('/elections/:id', adminAuth, adminController.getElection);
 router.put('/elections/:id', adminAuth, adminController.updateElection);
 router.delete('/elections/:id', adminAuth, adminController.deleteElection);
 
-// --- VOTANTES ---
-router.get('/voters', adminAuth, adminController.listVoters);
-router.post('/voters', adminAuth, adminController.addVoter);
-router.put('/voters/:id', adminAuth, adminController.updateVoter);
-router.delete('/voters/:id', adminAuth, adminController.deleteVoter);
-
-console.log('Admin routes loaded');
-
-module.exports = router;
 
 // --- VOTANTES ---
 router.get('/voters', adminAuth, adminController.listVoters);

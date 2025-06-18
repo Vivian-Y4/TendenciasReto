@@ -10,6 +10,7 @@ const userWalletRoutes = require('./server/routes/userWallet');
 const adminStatsRoutes = require('./server/routes/adminStatistics');
 const adminActivityRoutes = require('./server/routes/activityLog');
 const jceVoterRegistryRoutes = require('./server/routes/jceVoterRegistry'); // Added JCE routes
+const candidateAdminRoutes = require('./server/routes/candidateAdmin');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/elections', electionRoutes);
 app.use('/api/admin/statistics', adminStatsRoutes);
 app.use('/api/admin/activity', adminActivityRoutes);
+app.use('/api/admin/candidates', candidateAdminRoutes);
 
 // Resto de rutas admin
 app.use('/api/admin', adminRoutes);
