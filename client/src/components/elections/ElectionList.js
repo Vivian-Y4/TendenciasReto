@@ -20,15 +20,26 @@ const ElectionList = () => {
     try {
       setLoading(true);
       setError('');
+
+      const token = localStorage.getItem('auth_token');
+      const requestHeaders = { 'Content-Type': 'application/json' };
+      if (token) {
+        requestHeaders['Authorization'] = `Bearer ${token}`;
+      }
       
       console.log('Fetching elections from:', `${process.env.REACT_APP_API_URL}/api/elections`);
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections`, {
+        method: 'GET',
+        headers: requestHeaders
+      });
       console.log('Response status:', response.status);
       const data = await response.json();
       console.log('Response data:', data);
       
       if (!response.ok || !data.success) {
-        throw new Error(data.message || 'Failed to fetch elections');
+        // Try to get more specific error from backend if available
+        const errorMsg = data.message || (data.error && data.error.message) || 'Failed to fetch elections';
+        throw new Error(errorMsg);
       }
       
       // Adjust according to backend response structure, assuming it's in data.data now
@@ -111,21 +122,24 @@ const ElectionList = () => {
             <Card className="h-100 shadow-sm">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                  <Card.Title>{election.title}</Card.Title>
-                  {getStatusBadge(election)}
+                <Card.Title>{election.title || 'Untitled Election'}</Card.Title>
+                  {getStatusBadge({ startTime: election.startDate, endTime: election.endDate, status: election.status })}
                 </div>
-                <Card.Text>{election.description}</Card.Text>
+                <Card.Text>{election.description || 'No description available.'}</Card.Text>
                 <div className="small text-muted mb-3">
-                  <div><strong>Start:</strong> {formatTimestamp(election.startTime)}</div>
-                  <div><strong>End:</strong> {formatTimestamp(election.endTime)}</div>
-                  <div><strong>Candidates:</strong> {election.candidateCount}</div>
-                  <div><strong>Total Votes:</strong> {election.totalVotes}</div>
+                  <div><strong>Nivel:</strong> {election.level}</div>
+                  {election.province && <div><strong>Provincia:</strong> {election.province}</div>}
+                  <div><strong>Inicio:</strong> {formatTimestamp(election.startDate)}</div>
+                  <div><strong>Fin:</strong> {formatTimestamp(election.endDate)}</div>
+                  {/* <div><strong>Candidates:</strong> {election.candidateCount || 'N/A'}</div>
+                  <div><strong>Total Votes:</strong> {election.totalVotes || 'N/A'}</div> */}
                 </div>
               </Card.Body>
               <Card.Footer className="bg-white">
                 <Button 
                   as={Link} 
-                  to={`/elections/${election.id}`} 
+                  // Use election._id for MongoDB documents, election.id for contract-based if mixed
+                  to={`/elections/${election._id || election.id}`}
                   variant="outline-primary" 
                   className="w-100"
                 >

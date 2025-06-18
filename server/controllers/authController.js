@@ -59,8 +59,8 @@ const getNonce = async (req, res, next) => {
  */
 const verifySignature = async (req, res, next) => {
   try {
-    const { address, signature, message, province } = req.body;
-    
+    const { address, signature, message, province: clientSelectedProvince, cedula, name: userNameFromRequest } = req.body; // Added clientSelectedProvince, cedula, userNameFromRequest
+
     // Verificar que la firma sea válida
     const signerAddr = ethers.utils.verifyMessage(message, signature);
     
@@ -84,18 +84,61 @@ const verifySignature = async (req, res, next) => {
     
     // Actualizar usuario
     user.lastLogin = Date.now();
-    // Si provincia viene y es diferente, actualiza
-    if (province && user.province !== province) {
-      user.province = province;
+    // Si clientSelectedProvince viene y es diferente en el User, actualiza (puede ser redundante si el Voter actualiza)
+    if (clientSelectedProvince && user.province !== clientSelectedProvince) {
+      user.province = clientSelectedProvince;
     }
     // Marcar el nonce actual como usado
     user.markNonceAsUsed();
     // Generar nuevo nonce para próxima autenticación
     user.generateNonce();
-    await user.save();
+    // await user.save(); // Guardar user se hará después de la lógica de Voter
+
+    let userProvince = clientSelectedProvince; // Default to client selected
+    let userVoterIdentifier = null;
+    let finalUserName = user.name || userNameFromRequest; // Use User.name first, then request name
+
+    if (cedula) {
+      const voterRecord = await Voter.findOne({ nationalId: cedula });
+
+      if (voterRecord) {
+        voterRecord.province = clientSelectedProvince;
+        voterRecord.walletAddress = address.toLowerCase(); // Link/update wallet address
+        // voterIdentifier se asume que ya está en voterRecord si existe
+
+        await voterRecord.save();
+
+        userProvince = voterRecord.province;
+        userVoterIdentifier = voterRecord.voterIdentifier; // Este es el ZK ID
+        finalUserName = voterRecord.firstName || user.name || userNameFromRequest; // Prioritize Voter.firstName
+
+        // Sincronizar User.province con Voter.province si es diferente
+        if (user.province !== voterRecord.province) {
+            user.province = voterRecord.province;
+        }
+
+      } else {
+        // Voter no encontrado, usar lo que envió el cliente para provincia
+        // userVoterIdentifier sigue siendo null
+        // finalUserName ya está seteado
+      }
+    }
     
+    await user.save(); // Guardar User después de cualquier posible actualización de provincia
+
     // Generar JWT
-    const token = user.generateAuthToken();
+    const token = jwt.sign(
+      {
+        address: user.address,
+        isAdmin: user.isAdmin,
+        roles: user.roles,
+        province: userProvince, // Usar la provincia resuelta
+        voterIdentifier: userVoterIdentifier, // Incluir el ZK ID
+        name: finalUserName // Usar el nombre resuelto
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
     
     res.json({
       success: true,
@@ -104,9 +147,11 @@ const verifySignature = async (req, res, next) => {
         address: user.address,
         isAdmin: user.isAdmin,
         roles: user.roles,
-        name: user.name,
+        name: finalUserName, // Nombre resuelto
         email: user.email,
-        preferredLanguage: user.preferredLanguage
+        preferredLanguage: user.preferredLanguage,
+        province: userProvince, // Provincia resuelta
+        voterIdentifier: userVoterIdentifier // ZK ID
       }
     });
   } catch (error) {

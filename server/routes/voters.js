@@ -6,22 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 
-// Middleware for JWT verification
-const verifyToken = (req, res, next) => {
-  const token = req.header('x-auth-token');
-  
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'No token, authorization denied' });
-  }
-  
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-temporary-jwt-secret');
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ success: false, message: 'Token is not valid' });
-  }
-};
+const { authenticate } = require('../middlewares/auth'); // Import authenticate
 
 // Setup connection to Ethereum provider
 const setupProvider = () => {
@@ -49,7 +34,7 @@ const setupProvider = () => {
 router.post(
   '/register',
   [
-    verifyToken,
+    authenticate, // Use authenticate middleware
     body('electionId').notEmpty().withMessage('Election ID is required'),
     body('voterAddress').notEmpty().withMessage('Voter wallet address is required')
   ],
@@ -109,7 +94,7 @@ router.post(
 router.post(
   '/vote',
   [
-    verifyToken,
+    authenticate, // Use authenticate middleware
     body('electionId').notEmpty().withMessage('Election ID is required'),
     body('candidateId').notEmpty().withMessage('Candidate ID is required')
   ],
@@ -180,8 +165,12 @@ router.post(
 // @route   GET api/voters/status/:electionId
 // @desc    Get the voter's status in an election
 // @access  Private (Authenticated user)
-router.get('/status/:electionId', verifyToken, async (req, res) => {
+router.get('/status/:electionId', authenticate, async (req, res) => { // Use authenticate
   try {
+    // Ensure req.user is populated by authenticate and contains address
+    if (!req.user || !req.user.address) {
+      return res.status(401).json({ success: false, message: 'User address not found in token.' });
+    }
     const { provider, contractABI, contractAddress } = setupProvider();
     const contract = new ethers.Contract(contractAddress, contractABI, provider);
     
@@ -215,7 +204,7 @@ const merkleController = require('../controllers/merkleController');
 // @access  Private (Authenticated user - voter)
 router.get(
   '/:electionId/merkle-proof',
-  verifyToken, // Assumes verifyToken populates req.user with necessary details including voterIdentifier
+  authenticate, // Use authenticate middleware
   merkleController.getMerkleProofForVoter
 );
 

@@ -199,6 +199,11 @@ const electionSchema = new mongoose.Schema({
   deploymentBlockNumber: {
     type: Number
   },
+  merkleRoot: { // New field for ZK
+    type: String,
+    trim: true,
+    sparse: true
+  },
   finalizationTxHash: {
     type: String,
     trim: true

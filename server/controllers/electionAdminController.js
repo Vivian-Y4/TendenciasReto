@@ -505,14 +505,19 @@ const setElectionMerkleRoot = async (req, res, next) => {
     const receipt = await tx.wait();
     console.log(`[ElectionAdminCtrl] setMerkleRoot TX confirmed. Block: ${receipt.blockNumber}, Gas: ${receipt.gasUsed.toString()}`);
 
-    // Update the election model in DB if you store merkleRoot there as well
-    const updatedElection = await Election.findOneAndUpdate(
-        { contractElectionId: numericElectionId.toString() }, // Assuming you have a field to map contract ID to DB ID
-        { merkleRoot: merkleRoot, updatedAt: new Date() },
-        { new: true }
-    );
-    // If not found by contractElectionId, you might need to find by _id if electionId param is MongoDB _id
-    // For now, this assumes a mapping or that electionId is the DB identifier.
+    // Update the election model in DB
+    const electionInDb = await Election.findOne({ blockchainId: numericElectionId.toString() });
+
+    let dbUpdateStatus = 'not_found_in_db';
+    if (electionInDb) {
+        electionInDb.merkleRoot = merkleRoot;
+        electionInDb.lastModifiedBy = req.user ? (req.user._id || req.user.id) : null; // Store who modified
+        await electionInDb.save();
+        dbUpdateStatus = 'synced';
+        console.log(`[ElectionAdminCtrl] Merkle root for blockchainId ${numericElectionId.toString()} saved to DB (_id: ${electionInDb._id}).`);
+    } else {
+        console.warn(`[ElectionAdminCtrl] Election with blockchainId ${numericElectionId.toString()} not found in DB to save Merkle root.`);
+    }
 
     if (req.user && ActivityLog) {
         try {
@@ -530,7 +535,7 @@ const setElectionMerkleRoot = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: `Merkle root para la elección ${numericElectionId} establecida exitosamente.`,
-      data: { transactionHash: receipt.transactionHash, dbElectionUpdate: updatedElection ? 'synced' : 'not_synced_or_not_found' }
+      data: { transactionHash: receipt.transactionHash, dbElectionUpdate: dbUpdateStatus }
     });
   } catch (error) {
     return handleContractError(error, contract, next);
