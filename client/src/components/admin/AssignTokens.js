@@ -82,19 +82,19 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         headers: { "x-auth-token": adminToken }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        setGroupStatus(`Error al obtener votantes: ${errorData.message || response.statusText}`);
-        setGroupLoading(false);
-        return;
-      }
+        if (!response.ok) {
+          const errorData = await response.json();
+          setGroupStatus(`Error al obtener votantes: ${errorData.message || response.statusText}`);
+          setGroupLoading(false);
+          return;
+        }
 
-      const data = await response.json();
-      if (!data.success || !data.voters || data.voters.length === 0) {
-        setGroupStatus(`No se encontraron votantes con wallet para la provincia ${selectedProvince}.`);
-        setGroupLoading(false);
-        return;
-      }
+        const data = await response.json();
+        if (!data.success || !data.voters || data.voters.length === 0) {
+          setGroupStatus(`No se encontraron votantes con wallet para la provincia ${selectedProvince}.`);
+          setGroupLoading(false);
+          return;
+        }
 
       const votersToProcess = data.voters;
       setGroupStatus(`Votantes encontrados: ${votersToProcess.length}. Iniciando asignación...`);
@@ -141,81 +141,83 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         }
       }
 
-      let summaryMessage = `Asignación para ${selectedProvince} completada. Éxitos: ${successCount}, Fallos: ${failCount}.`;
-      if (failedAssignments.length > 0) {
-        summaryMessage += " Detalles de fallos: " + failedAssignments.map(f => `${f.voter}: ${f.error}`).join("; ");
-        console.error("Fallos en asignación grupal:", failedAssignments);
+        let summaryMessage = `Asignación para ${selectedProvince} completada. Éxitos: ${successCount}, Fallos: ${failCount}.`;
+        if (failedAssignments.length > 0) {
+          summaryMessage += " Detalles de fallos: " + failedAssignments.map(f => `${f.voter}: ${f.error}`).join("; ");
+          console.error("Fallos en asignación grupal:", failedAssignments);
+        }
+        setGroupStatus(summaryMessage);
+        // Clear fields on success or partial success
+        // setSelectedProvince('');
+        // setGroupAmount('');
+
+      } catch (error) {
+        console.error('Error en handleGroupAssign:', error);
+        setGroupStatus('Error durante la asignación grupal: ' + error.message);
+      } finally {
+        setGroupLoading(false);
       }
-
-      setGroupStatus(summaryMessage);
-    } catch (error) {
-      console.error('Error en handleGroupAssign:', error);
-      setGroupStatus('Error durante la asignación grupal: ' + error.message);
-    } finally {
-      setGroupLoading(false);
-    }
-  };
-
-  return (
-    <div className="mb-3">
-      <h5>Asignar tokens a votante</h5>
-      <div className="d-flex mb-2">
-        <input
-          type="text"
-          className="form-control me-2"
-          placeholder="Dirección del votante"
-          value={recipient}
-          onChange={e => setRecipient(e.target.value)}
-        />
-        <input
-          type="number"
-          className="form-control me-2"
-          placeholder="Cantidad de tokens"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-        />
-        <button
-          className="btn btn-primary"
-          onClick={handleAssign}
-          disabled={loading || !recipient || !amount}
-        >
-          {loading ? "Asignando..." : "Asignar"}
-        </button>
+    };
+  
+    return (
+      <div className="mb-3">
+        <h5>Asignar tokens a votante</h5>
+        <div className="d-flex mb-2">
+          <input
+            type="text"
+            className="form-control me-2"
+            placeholder="Dirección del votante"
+            value={recipient}
+            onChange={e => setRecipient(e.target.value)}
+          />
+          <input
+            type="number"
+            className="form-control me-2"
+            placeholder="Cantidad de tokens"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={handleAssign} disabled={loading || !recipient || !amount}>
+            {loading ? "Asignando..." : "Asignar"}
+          </button>
+        </div>
+        {status && <div className="text-info">{status}</div>}
       </div>
-      {status && <div className="text-info">{status}</div>}
 
       <hr />
 
-      <h5>Asignar tokens por Provincia</h5>
-      <div className="d-flex mb-2">
-        <select
-          className="form-select me-2"
-          value={selectedProvince}
-          onChange={e => setSelectedProvince(e.target.value)}
-        >
-          <option value="">Seleccione provincia...</option>
-          {PROVINCES.map(province => (
-            <option key={province} value={province}>{province}</option>
-          ))}
-        </select>
-        <input
-          type="number"
-          className="form-control me-2"
-          placeholder="Cantidad por votante"
-          value={groupAmount}
-          onChange={e => setGroupAmount(e.target.value)}
-        />
-        <button
-          className="btn btn-secondary"
-          onClick={handleGroupAssign}
-          disabled={groupLoading || !selectedProvince || !groupAmount}
-        >
-          {groupLoading ? "Asignando..." : "Asignar a Provincia"}
-        </button>
+      <div className="mb-3">
+        <h5>Asignar tokens por Provincia</h5>
+        <div className="d-flex mb-2">
+          <select
+            className="form-select me-2"
+            value={selectedProvince}
+            onChange={e => setSelectedProvince(e.target.value)}
+          >
+            <option value="">Seleccione provincia...</option>
+            {PROVINCES.map(province => (
+              <option key={province} value={province}>{province}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            className="form-control me-2"
+            placeholder="Cantidad por votante"
+            value={groupAmount}
+            onChange={e => setGroupAmount(e.target.value)}
+          />
+          <button
+            className="btn btn-secondary"
+            onClick={handleGroupAssign}
+            disabled={groupLoading || !selectedProvince || !groupAmount}
+          >
+            {groupLoading ? "Asignando..." : "Asignar a Provincia"}
+          </button>
+        </div>
+        {groupStatus && <div className="text-info">{groupStatus}</div>}
       </div>
-      {groupStatus && <div className="text-info">{groupStatus}</div>}
-    </div>
-  );
-};
+    );
+  };
+  
 
 export default AssignTokens;

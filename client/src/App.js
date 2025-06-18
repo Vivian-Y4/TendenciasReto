@@ -33,8 +33,8 @@ import AuthContext from './context/AuthContext';
 import { AdminProvider } from './context/AdminContext';
 
 // Import contracts ABI
-// import VotingSystem_WithToken from './abis/VotingSystem_WithToken.json'; // Old ABI
-import VotingSystemABI from './abis/VotingSystem.json'; // Correct, updated ABI
+import VotingSystemWithTokenABI from './abis/VotingSystem_WithToken.json'; // Use this for the main contract
+// import VotingSystemABI from './abis/VotingSystem.json'; // ZK version, not the primary for general app use
 import VotingToken from './abis/VotingToken.json'; // Keep if token functionality is still used elsewhere
 
 // Import styles
@@ -139,18 +139,19 @@ function App() {
       // Use the new VotingSystem ABI
       const votingContract = new ethers.Contract(
         process.env.REACT_APP_VOTING_ADDRESS, // Ensure this is set in client .env
-        VotingSystemABI.abi, // Using the correct ABI
+        VotingSystemWithTokenABI.abi, // Use Token version's ABI
         signer
       );
       setContract(votingContract);
 
-      // Example: Fetch and set voterIdentifier for the logged-in user
-      const fetchedVoterIdentifier = await getMockVoterIdentifierForUser(address);
-      if (fetchedVoterIdentifier) {
-        setVoterIdentifier(fetchedVoterIdentifier);
-        console.log("Voter Identifier set in context:", fetchedVoterIdentifier);
+      // Set voterIdentifier to the user's Ethereum address, as VotingSystem_WithToken uses msg.sender
+      if (address) {
+        setVoterIdentifier(address);
+        console.log("Voter Identifier set in context (using user address):", address);
       } else {
-        toast.warn("No se pudo obtener el identificador de votante. La votación podría no estar disponible.");
+        // This case should ideally not happen if login was successful
+        toast.warn("No se pudo obtener la dirección del usuario para el identificador de votante.");
+        setVoterIdentifier(null);
       }
 
       // Token contract (if still needed for other parts of the app)
@@ -165,9 +166,9 @@ function App() {
         console.warn("Token contract address or ABI not fully configured if it's optional.");
       }
   
-      // Verifica admin (using owner() from Ownable)
-      const contractOwner = await votingContract.owner(); // Changed from admin() to owner()
-      setIsAdmin(address.toLowerCase() === contractOwner.toLowerCase());
+      // Verifica admin (using admin() from VotingSystem_WithToken)
+      const contractAdmin = await votingContract.admin(); // Call admin() getter
+      setIsAdmin(address.toLowerCase() === contractAdmin.toLowerCase());
       setIsAuthenticated(true);
       toast.success('Sesión iniciada y wallet conectada');
       navigate('/');
@@ -176,7 +177,7 @@ function App() {
       toast.error(`Error cargando contratos o datos iniciales: ${error.message}`);
       console.error("Error in handleLoginSuccess:", error);
       console.log("VOTING ADDRESS:", process.env.REACT_APP_VOTING_ADDRESS);
-      console.log("VOTING ABI used:", VotingSystemABI.abi ? 'Loaded' : 'Not Loaded');
+      console.log("VOTING ABI used:", VotingSystemWithTokenABI.abi ? 'Loaded' : 'Not Loaded'); // Updated log
       console.log("TOKEN ADDRESS:", process.env.REACT_APP_TOKEN_ADDRESS);
       console.log("Signer:", signer);
     } finally {

@@ -368,13 +368,6 @@ const updateVoter = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  createVoter,
-  getVoters,
-  getVoterById,
-  updateVoter
-};
-
 const getVotersByProvince = async (req, res) => {
   try {
     const province = req.params.province;
@@ -399,4 +392,31 @@ const getVotersByProvince = async (req, res) => {
     console.error('Error fetching voters by province:', error);
     res.status(500).json({ success: false, message: 'Server error fetching voters by province.', error: error.message });
   }
+};
+
+const getAllVotersWithWallets = async (req, res) => {
+  try {
+    const voters = await Voter.find({
+      walletAddress: { $exists: true, $ne: null, $ne: "" }
+    })
+    .select('walletAddress firstName lastName province email'); // Added email for better identification
+
+    if (!voters || voters.length === 0) {
+      return res.status(404).json({ success: false, message: 'No voters found with a valid wallet address.' });
+    }
+
+    res.json({ success: true, voters });
+  } catch (error) {
+    console.error('Error fetching all voters with wallets:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching all voters with wallets.', error: error.message });
+  }
+};
+
+module.exports = {
+  createVoter,
+  getVoters,
+  getVoterById,
+  updateVoter,
+  getVotersByProvince,
+  getAllVotersWithWallets
 };
