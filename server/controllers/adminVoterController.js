@@ -374,3 +374,29 @@ module.exports = {
   getVoterById,
   updateVoter
 };
+
+const getVotersByProvince = async (req, res) => {
+  try {
+    const province = req.params.province;
+    if (!province) {
+      return res.status(400).json({ success: false, message: 'Province parameter is required.' });
+    }
+
+    // Find voters by province, selecting only walletAddress, firstName, lastName, and province for now.
+    // Ensure that walletAddress is not null or empty.
+    const voters = await Voter.find({
+      province: province,
+      walletAddress: { $exists: true, $ne: null, $ne: "" }
+    })
+    .select('walletAddress firstName lastName province');
+
+    if (!voters || voters.length === 0) {
+      return res.status(404).json({ success: false, message: 'No voters found for this province with a valid wallet address.' });
+    }
+
+    res.json({ success: true, voters });
+  } catch (error) {
+    console.error('Error fetching voters by province:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching voters by province.', error: error.message });
+  }
+};
