@@ -114,7 +114,7 @@ const AdminDashboard = () => {
   }, [isAdminAuthenticated, navigate, fetchElections, fetchVoterStats, fetchUsers]);
 
   const handleUpdateElection = async () => {
-    if (!editElectionTitle || !editElectionDescription || !editElectionStartDate || !editElectionEndDate || !editElectionStartTime || !editElectionEndTime || !editElectionLevel || (['Congresual', 'Municipal'].includes(editElectionLevel) && !editElectionProvince)) {
+    if (!editElectionTitle || !editElectionDescription || !editElectionStartDate || !editElectionEndDate || !editElectionStartTime || !editElectionEndTime || !editElectionLevel || (['Senatorial', 'Municipal', 'Diputados'].includes(editElectionLevel) && !editElectionProvince)) {
       toast.error("Por favor completa todos los campos, incluyendo la provincia si es necesario.");
       return;
     }
@@ -127,7 +127,7 @@ const AdminDashboard = () => {
         startDate: new Date(`${editElectionStartDate}T${editElectionStartTime}`).toISOString(),
         endDate: new Date(`${editElectionEndDate}T${editElectionEndTime}`).toISOString(),
         electoralLevel: editElectionLevel,
-        province: ['Congresual', 'Municipal'].includes(editElectionLevel) ? editElectionProvince : undefined,
+        province: ['Senatorial', 'Municipal', 'Diputados'].includes(editElectionLevel) ? editElectionProvince : undefined,
       };
       await axios.put(`/api/admin/elections/${editElectionId}`, payload, { headers: { "x-auth-token": token } });
       toast.success("Elección actualizada correctamente");
@@ -351,11 +351,12 @@ const AdminDashboard = () => {
               <Form.Control as="select" value={editElectionLevel} onChange={(e) => setEditElectionLevel(e.target.value)} required>
                 <option value="">Seleccione un nivel</option>
                 <option value="Presidencial">Presidencial</option>
-                <option value="Congresual">Congresual</option>
+                <option value="Senatorial">Senatorial</option>
                 <option value="Municipal">Municipal</option>
+                <option value="Diputados">Diputados</option>
               </Form.Control>
             </Form.Group>
-            {['Congresual', 'Municipal'].includes(editElectionLevel) && (
+            {['Senatorial','Diputados', 'Municipal'].includes(editElectionLevel) && (
               <Form.Group className="mb-3">
                 <Form.Label>Provincia</Form.Label>
                 <Form.Control as="select" value={editElectionProvince} onChange={(e) => setEditElectionProvince(e.target.value)} required>

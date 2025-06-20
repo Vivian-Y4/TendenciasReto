@@ -125,7 +125,7 @@ const EditElection = () => {
       return false;
     }
 
-    if (['Municipal', 'Congresual'].includes(formData.electoralLevel) && !formData.province) {
+    if (['Municipal', 'Senatorial', 'Diputados'].includes(formData.electoralLevel) && !formData.province) {
       setError('Debe seleccionar una provincia para este nivel electoral');
       return false;
     }
@@ -327,13 +327,14 @@ const EditElection = () => {
                   >
                     <option value="">Seleccione el nivel</option>
                     <option value="Presidencial">Presidencial</option>
-                    <option value="Congresual">Congresual</option>
+                    <option value="Senatorial">Senatorial</option>
                     <option value="Municipal">Municipal</option>
+                    <option value="Diputados">Diputados</option>
                   </Form.Control>
                 </Form.Group>
               </Col>
             </Row>
-            {['Municipal', 'Congresual'].includes(formData.electoralLevel) && (
+            {['Municipal', 'Senatorial', 'Diputados'].includes(formData.electoralLevel) && (
               <Row className="mb-4">
                 <Col md={12}>
                   <Form.Group controlId="province">

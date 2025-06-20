@@ -440,7 +440,7 @@ const updateElection = async (req, res, next) => {
     // Determine the final electoral level to correctly handle the province
     const finalElectoralLevel = electoralLevel !== undefined ? electoralLevel : election.electoralLevel;
 
-    if (['Municipal', 'Congresual'].includes(finalElectoralLevel)) {
+    if (['Municipal', 'Senatorial'].includes(finalElectoralLevel)) {
       // If the province is explicitly being updated, apply the change.
       if (province !== undefined) {
         electionUpdateData.province = province;
