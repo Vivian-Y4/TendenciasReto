@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Badge, Button, Spinner } from 'react-bootstr
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthContext from '../../context/AuthContext';
+import AdminContext from '../../context/AdminContext';
 import { formatTimestamp, isElectionActive, hasElectionEnded } from '../../utils/contractUtils';
 
 const ElectionList = () => {
@@ -10,13 +11,70 @@ const ElectionList = () => {
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { contract } = useContext(AuthContext);
+  const { contract, userProvince } = useContext(AuthContext);
+  const { isAdminAuthenticated } = useContext(AdminContext);
 
   useEffect(() => {
     fetchElections();
-  }, [contract]);
+  }, [contract, userProvince]);
+
+  const fetchElectionsFromContract = async () => {
+    let totalElections = 0;
+    if (typeof contract.electionCount === 'function') {
+      const count = await contract.electionCount();
+      totalElections = count.toNumber();
+    } else if (typeof contract.getElectionsCount === 'function') {
+      const count = await contract.getElectionsCount();
+      totalElections = count.toNumber();
+    } else {
+      throw new Error('El contrato no expone un método de conteo de elecciones reconocido.');
+    }
+
+    const electionPromises = [];
+    for (let i = 0; i < totalElections; i++) {
+      electionPromises.push(contract.elections(i).catch(() => null));
+    }
+
+    const resolved = (await Promise.all(electionPromises)).filter(Boolean);
+
+    return resolved.map((election, index) => ({
+      id: index + 1,
+      title: election.title,
+      description: election.description ?? '',
+      startTime: election.startTime?.toNumber ? election.startTime.toNumber() : 0,
+      endTime: election.endTime?.toNumber ? election.endTime.toNumber() : 0,
+      candidateCount: election.candidateCount?.toNumber ? election.candidateCount.toNumber() : 0,
+      totalVotes: election.totalVotes?.toNumber ? election.totalVotes.toNumber() : 0,
+      isActive: election.isActive ?? isElectionActive(election)
+    }));
+  };
 
   const fetchElections = async () => {
+    // Si hay contrato conectado úsalo; de lo contrario (ej. admin sin wallet) consulta la API
+    if (!contract) {
+      if (!isAdminAuthenticated) {
+        setError('El contrato no está disponible. Por favor, conecta tu billetera primero.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL;
+        const res = await fetch(`${apiUrl}/api/elections`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Error obteniendo elecciones');
+
+        const allElections = json.data || json.elections || [];
+        setElections(allElections);
+        return;
+      } catch (apiErr) {
+        console.error('Error al obtener elecciones desde la API:', apiErr);
+        setError(apiErr.message || 'Error al obtener elecciones desde la API');
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError('');

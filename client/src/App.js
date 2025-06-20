@@ -27,6 +27,7 @@ import Footer from './components/layout/Footer';
 import ManageCandidates from './components/admin/ManageCandidates';
 import Configuration from './components/admin/Configuration';
 import Activity from './components/admin/Activity';
+import ResultsPanel from './components/elections/ResultsPanel';
 
 // Import context
 import AuthContext from './context/AuthContext';
@@ -52,7 +53,12 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null); // This will be the ZK VotingSystem contract
+  const [contract, setContract] = useState(null);
+  const [tokenContract, setTokenContract] = useState(null);
+  const [userProvince, setUserProvince] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [voterIdentifier, setVoterIdentifier] = useState(null);
+  const [zkVoterIdentifier, setZkVoterIdentifier] = useState(null);
   const [userProvince, setUserProvince] = useState(null);
   const [zkVoterIdentifier, setZkVoterIdentifier] = useState(null); // Use a distinct name for ZK ID
   const [tokenContract, setTokenContract] = useState(null); // Keep if other token interactions exist
@@ -194,6 +200,7 @@ function App() {
       setUserProvince(authData.user.province);
       setZkVoterIdentifier(authData.user.voterIdentifier);
       setIsAdmin(authData.user.isAdmin);
+      setUserProvince(province);
 
       // 5. Initialize ZK Contract
       const zkVotingSystemAddress = process.env.REACT_APP_ZK_VOTING_SYSTEM_ADDRESS;
@@ -251,6 +258,7 @@ function App() {
       userAddress,
       userName,
       isAdmin,
+      userProvince,
       // login, // login function removed, handleLoginSuccess is the primary flow
       logout,
       provider,
@@ -273,6 +281,7 @@ function App() {
               <Route path="/elections" element={<ElectionList />} />
               <Route path="/elections/:id" element={<ElectionDetails />} />
               <Route path="/elections/:id/results" element={<ElectionResults />} />
+              <Route path="/results" element={<ResultsPanel />} />
               <Route path="/about" element={<About />} />
               <Route path="/help" element={<Help />} />
               {/* Ruta protegida para votantes */}

@@ -9,11 +9,18 @@ export const authService = {
    * @param {string} cedula - Cédula de identidad dominicana
    * @param {string} clientSelectedProvince - Provincia seleccionada por el cliente
    * @param {string} userName - Nombre del usuario (opcional)
+   * @param {string} provincia - Provincia de residencia
    * @returns {Promise<{success: boolean, address: string, token: string, user: object}|{success: boolean, error: string}>}
    */
-  connectWallet: async (cedula, clientSelectedProvince, userName = '') => {
+  connectWallet: async (cedula, clientSelectedProvince, userName = '', provincia = '') => {
     try {
-      console.log('Iniciando conectWallet con:', { cedula, clientSelectedProvince, userName });
+      console.log('Iniciando conectWallet con:', { cedula, clientSelectedProvince, userName, provincia });
+      
+      // Validación de parámetros obligatorios
+      if (!provincia) {
+        console.error('Provincia no proporcionada');
+        return { success: false, error: 'Provincia no proporcionada' };
+      }
       
       // Validación más estricta para la cédula
       if (!cedula) {
@@ -119,7 +126,8 @@ export const authService = {
         signature: signature ? 'presente' : 'ausente',
         message: nonceData.message,
         name: userName,
-        cedula: cleanCedula
+        cedula: cleanCedula,
+        provincia
       });
       
       let authData;
@@ -137,7 +145,8 @@ export const authService = {
             message: nonceData.message,
             name: userName || 'Usuario',
             cedula: cleanCedula,
-            clientSelectedProvince // Add this new field
+            clientSelectedProvince, // Add this new field,
+            provincia
           })
         });
         
@@ -175,7 +184,7 @@ export const authService = {
   },
   
   /**
-   * Verifica si hay una sesiu00f3n activa guardada
+   * Verifica si hay una sesión activa guardada
    * @returns {boolean}
    */
   hasActiveSession: () => {
@@ -185,7 +194,7 @@ export const authService = {
   },
   
   /**
-   * Obtiene el token de autenticaciu00f3n actual
+   * Obtiene el token de autenticación actual
    * @returns {string|null}
    */
   getAuthToken: () => {
@@ -193,7 +202,7 @@ export const authService = {
   },
   
   /**
-   * Obtiene la direcciu00f3n de billetera guardada
+   * Obtiene la dirección de billetera guardada
    * @returns {string|null}
    */
   getSavedAddress: () => {
@@ -209,8 +218,8 @@ export const authService = {
   },
   
   /**
-   * Guarda la informaciu00f3n de sesiu00f3n
-   * @param {string} address - Direcciu00f3n de la billetera
+   * Guarda la información de sesión
+   * @param {string} address - Dirección de la billetera
    * @param {string} token - Token JWT
    * @param {string} name - Nombre del usuario
    */
@@ -221,7 +230,7 @@ export const authService = {
   },
   
   /**
-   * Cierra la sesiu00f3n
+   * Cierra la sesión
    */
   logout: () => {
     localStorage.removeItem('auth_token');
@@ -230,8 +239,8 @@ export const authService = {
   },
   
   /**
-   * Verifica si la direcciu00f3n proporcionada es un administrador
-   * @param {string} address - Direcciu00f3n a verificar
+   * Verifica si la dirección proporcionada es un administrador
+   * @param {string} address - Dirección a verificar
    * @returns {boolean}
    */
   isAdmin: (address) => {

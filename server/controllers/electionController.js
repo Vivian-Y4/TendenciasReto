@@ -139,6 +139,13 @@ const getElection = async (req, res, next) => {
         const { provider, contractABI, contractAddress } = setupProvider(); // setupProvider might be reused
         contract = new ethers.Contract(contractAddress, contractABI, provider);
 
+    // --- Validación temprana para evitar reverts del contrato ---
+    const electionCount = (await contract.electionCount()).toNumber();
+    const idNumber = numericElectionId.toNumber();
+    if (idNumber === 0 || idNumber > electionCount) {
+      return next(new AppError(`La elección con ID ${idNumber} no existe.`, 404));
+    }
+
         const summary = await contract.getElectionSummary(numericBlockchainId);
 
         // Populate contractSummaryData from summary
