@@ -3,6 +3,7 @@ const fs = require('fs'); // Using synchronous fs
 const path = require('path');
 const { AppError } = require('../middlewares/errorHandler');
 const Election = require('../models/Election'); // Import Election model
+const blockchainService = require('../utils/blockchainService'); // Import blockchainService
 
 let localContractABI = null; // Cache ABI - May still be needed for other functions like getElection, getElectionResults
 
@@ -116,7 +117,29 @@ const getElections = async (req, res, next) => {
  * @access  Público
  */
 const getElection = async (req, res, next) => {
-  const mongoElectionId = req.params.id;
+  const idParam = req.params.id;
+  console.log(`[ElectionCtrl] getElection endpoint hit for ID param: ${idParam}.`);
+
+  // If the ID consists only of digits, treat it as a blockchain election ID
+  if (/^\d+$/.test(idParam)) {
+    try {
+      const numericId = parseInt(idParam, 10);
+      const summary = await blockchainService.getElectionSummary(numericId);
+      const candidates = await blockchainService.getAllCandidates(numericId);
+      return res.json({
+        success: true,
+        data: {
+          ...summary,
+          candidates,
+        },
+      });
+    } catch (error) {
+      console.error(`[ElectionCtrl] Error fetching blockchain election ${idParam}:`, error);
+      return next(new AppError(`Error al obtener elección ${idParam} desde blockchain: ${error.message}`, 500));
+    }
+  }
+
+  const mongoElectionId = idParam;
   console.log(`[ElectionCtrl] getElection endpoint hit for MongoDB ID: ${mongoElectionId}.`);
 
   let contract; // For contract interactions if any
@@ -141,7 +164,7 @@ const getElection = async (req, res, next) => {
 
     // --- Validación temprana para evitar reverts del contrato ---
     const electionCount = (await contract.electionCount()).toNumber();
-    const idNumber = numericElectionId.toNumber();
+    const idNumber = numericBlockchainId.toNumber();
     if (idNumber === 0 || idNumber > electionCount) {
       return next(new AppError(`La elección con ID ${idNumber} no existe.`, 404));
     }
@@ -188,11 +211,9 @@ const getElection = async (req, res, next) => {
     // Ensure _id is stringified if not already by .lean() and spread
     responseData._id = responseData._id.toString();
 
-
     res.json({
       success: true,
-      message: "Detalles de la elección obtenidos.",
-      election: responseData // Client expects data under 'election' key
+      data: responseData,
     });
 
   } catch (error) {
@@ -267,7 +288,6 @@ const getElectionResults = async (req, res, next) => {
 
         res.json({
             success: true,
-            message: `Resultados de la elección ${numericElectionId.toString()} obtenidos desde la blockchain.`,
             data: {
                 electionId: numericElectionId.toString(),
                 resultsFinalized: summary.resultsFinalized,
@@ -286,20 +306,6 @@ const getElectionResults = async (req, res, next) => {
         }
         next(new AppError(`Error al obtener resultados para elección ${electionIdParam} desde blockchain: ${error.message}`, 500));
     }
-};
-
-module.exports = {
-  getElections,
-  getElection,
-  getElectionResults,
-  // Functions below are commented out as they are either admin-specific (handled by electionAdminController)
-  // or part of a more complex MongoDB-dependent system not in the current scope of direct contract integration.
-  // createElection,
-  // updateElection,
-  // finalizeElection,
-  // getElectionStatistics,
-  // castVote,
-  // getResults
 };
 
 /**
@@ -351,7 +357,6 @@ const revealVoteOnContract = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Voto revelado exitosamente y será contado.",
       data: {
         transactionHash: receipt.transactionHash,
         blockNumber: receipt.blockNumber,
