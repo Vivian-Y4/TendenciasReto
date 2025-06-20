@@ -27,6 +27,7 @@ import Footer from './components/layout/Footer';
 import ManageCandidates from './components/admin/ManageCandidates';
 import Configuration from './components/admin/Configuration';
 import Activity from './components/admin/Activity';
+import ResultsPanel from './components/elections/ResultsPanel';
 
 // Import context
 import AuthContext from './context/AuthContext';
@@ -55,6 +56,7 @@ function App() {
   const [contract, setContract] = useState(null); // This will be the main VotingSystem contract
   const [voterIdentifier, setVoterIdentifier] = useState(null); // Added for voterIdentifier
   const [tokenContract, setTokenContract] = useState(null);
+  const [userProvince, setUserProvince] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -151,6 +153,7 @@ function App() {
       setSigner(signer);
       setUserAddress(address);
       setUserName(address.substring(0, 6) + '...' + address.substring(address.length - 4));
+      setUserProvince(province);
 
       // Instanciar contratos
       const votingContract = new ethers.Contract(
@@ -272,6 +275,7 @@ function App() {
       userAddress,
       userName,
       isAdmin,
+      userProvince,
       login,
       logout,
       connectWalletForAdmin,
@@ -294,6 +298,7 @@ function App() {
               <Route path="/elections" element={<ElectionList />} />
               <Route path="/elections/:id" element={<ElectionDetails />} />
               <Route path="/elections/:id/results" element={<ElectionResults />} />
+              <Route path="/results" element={<ResultsPanel />} />
               <Route path="/about" element={<About />} />
               <Route path="/help" element={<Help />} />
               {/* Ruta protegida para votantes */}

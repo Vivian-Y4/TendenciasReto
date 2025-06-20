@@ -121,6 +121,13 @@ const getElection = async (req, res, next) => {
     const { provider, contractABI, contractAddress } = setupProvider();
     contract = new ethers.Contract(contractAddress, contractABI, provider);
 
+    // --- Validación temprana para evitar reverts del contrato ---
+    const electionCount = (await contract.electionCount()).toNumber();
+    const idNumber = numericElectionId.toNumber();
+    if (idNumber === 0 || idNumber > electionCount) {
+      return next(new AppError(`La elección con ID ${idNumber} no existe.`, 404));
+    }
+
     const summary = await contract.getElectionSummary(numericElectionId);
     // Basic check if title exists (implies election was found, though getElectionSummary might not revert for out of bounds)
     // The contract's electionExists modifier should handle out of bounds for most direct calls.

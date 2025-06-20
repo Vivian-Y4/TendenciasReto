@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Badge, Button, Spinner } from 'react-bootstr
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthContext from '../../context/AuthContext';
+import AdminContext from '../../context/AdminContext';
 import { formatTimestamp, isElectionActive, hasElectionEnded } from '../../utils/contractUtils';
 
 const ElectionList = () => {
@@ -10,17 +11,37 @@ const ElectionList = () => {
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { contract } = useContext(AuthContext);
+  const { contract, userProvince } = useContext(AuthContext);
+  const { isAdminAuthenticated } = useContext(AdminContext);
 
   useEffect(() => {
     fetchElections();
-  }, [contract]);
+  }, [contract, userProvince]);
 
   const fetchElections = async () => {
+    // Si hay contrato conectado úsalo; de lo contrario (ej. admin sin wallet) consulta la API
     if (!contract) {
-      setError("El contrato no está disponible. Por favor, conecta tu billetera primero.");
-      setLoading(false);
-      return;
+      if (!isAdminAuthenticated) {
+        setError("El contrato no está disponible. Por favor, conecta tu billetera primero.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL;
+        const res = await fetch(`${apiUrl}/api/elections`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Error obteniendo elecciones');
+
+        const allElections = json.data || json.elections || [];
+        setElections(allElections);
+        return;
+      } catch (apiErr) {
+        console.error('Error al obtener elecciones desde la API:', apiErr);
+        setError(apiErr.message || 'Error al obtener elecciones desde la API');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -54,8 +75,15 @@ const ElectionList = () => {
         candidateCount: election.candidateCount.toNumber(),
         totalVotes: election.totalVotes.toNumber(),
       }));
-      
-      setElections(formattedElections);
+
+      // Filtrar elecciones: mostrar todas las presidenciales y las que coinciden con provincia
+      const province = typeof userProvince === 'string' ? userProvince.trim().toLowerCase() : '';
+      const filtered = formattedElections.filter((el) => {
+        const isPresidential = el.title.toLowerCase().includes('presiden');
+        const matchesProvince = province && (el.description || '').toLowerCase().includes(province);
+        return isPresidential || matchesProvince;
+      });
+      setElections(filtered);
 
     } catch (e) {
       console.error('Error al obtener las elecciones del contrato:', e);
