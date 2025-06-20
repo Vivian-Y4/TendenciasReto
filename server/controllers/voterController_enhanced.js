@@ -215,13 +215,14 @@ const castVote = async (req, res, next) => {
       return next(new AppError('La elecciu00f3n no estu00e1 activa', 400));
     }
     
-    // Verificar si el votante estu00e1 registrado
-    const contract = await blockchainService.getContract();
-    const isRegistered = await contract.isVoterRegistered(electionId, req.user.address);
-    
-    if (!isRegistered) {
-      return next(new AppError('No estu00e1s registrado para esta elecciu00f3n', 403));
+    // Verificar si el usuario existe en la base de datos por su dirección de wallet
+    const user = await User.findOne({ address: req.user.address });
+    if (!user) {
+      return next(new AppError('Usuario no encontrado. Solo los usuarios registrados con una wallet pueden votar.', 403));
     }
+
+    // Las demás verificaciones se siguen haciendo contra el contrato
+    const contract = await blockchainService.getContract();
     
     // Verificar si ya ha votado
     const hasVoted = await contract.hasVoted(electionId, req.user.address);

@@ -82,7 +82,11 @@ const CreateElection = ({ onElectionCreated }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    console.log('[CreateElection] 1. Starting handleSubmit...');
+    if (!validateForm()) {
+      console.error('[CreateElection] Form validation failed.');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -107,15 +111,16 @@ const CreateElection = ({ onElectionCreated }) => {
       const contract = await getContractInstance(signer);
       if (!contract) throw new Error("No se pudo obtener la instancia del contrato.");
 
-      // Paso 1: Crear la elección sin candidatos
-      const createTx = await contract.createElection(
+      console.log('[CreateElection] 2. Calling blockchain contract to create election...');
+      const tx = await contract.createElection(
         formData.title,
         formData.description,
         startTimestamp,
         endTimestamp
       );
       toast.info("Creando la elección en la blockchain... por favor espera.");
-      const createReceipt = await createTx.wait();
+      const receipt = await tx.wait();
+      console.log('[CreateElection] 3. Blockchain transaction confirmed. Receipt:', receipt);
 
       // Lógica de reintentos para encontrar el evento, manejando la latencia del nodo RPC
       let event = null;
@@ -125,8 +130,8 @@ const CreateElection = ({ onElectionCreated }) => {
       for (let i = 0; i < retries; i++) {
         try {
           const filter = contract.filters.ElectionCreated();
-          const logs = await contract.queryFilter(filter, createReceipt.blockNumber);
-          const foundEvent = logs.find(log => log.transactionHash === createReceipt.transactionHash);
+          const logs = await contract.queryFilter(filter, receipt.blockNumber);
+          const foundEvent = logs.find(log => log.transactionHash === receipt.transactionHash);
 
           if (foundEvent) {
             console.log(`Evento 'ElectionCreated' encontrado en el intento ${i + 1}.`);
@@ -160,6 +165,9 @@ const CreateElection = ({ onElectionCreated }) => {
         console.log(`ID de elección obtenido por fallback: ${electionId}`);
       }
 
+      console.log(`[CreateElection] 4. ElectionCreated event found. Blockchain Election ID: ${electionId}`);
+      toast.success(`Elección creada en la blockchain con ID: ${electionId.toString()}`);
+
       // Paso 3: Añadir cada candidato a la elección recién creada en la blockchain
       toast.info(`Añadiendo ${candidates.length} candidatos a la elección #${electionId}...`);
       for (const candidateName of candidates) {
@@ -170,20 +178,22 @@ const CreateElection = ({ onElectionCreated }) => {
       }
 
       // 4. Notificar al backend sobre la nueva elección
+      console.log('[CreateElection] 5. Preparing data for backend registration...');
       const token = localStorage.getItem('adminToken');
       if (!token) throw new Error('No se encontró el token de autenticación.');
 
       const electionDataForBackend = {
-        id: electionId,
+        id: electionId.toString(),
         title: formData.title,
         description: formData.description,
-        startDate: new Date(startTimestamp * 1000).toISOString(),
-        endDate: new Date(endTimestamp * 1000).toISOString(),
+        startDate: new Date(`${formData.startDate}T${formData.startTime}`),
+        endDate: new Date(`${formData.endDate}T${formData.endTime}`),
         electoralLevel: formData.electoralLevel,
-        province: formData.province || null,
-        candidates: candidates // Send candidates to backend as well
+        province: formData.electoralLevel === 'Presidencial' ? null : formData.province,
+        candidates: candidates, // Include the candidates array
       };
 
+      console.log('[CreateElection] 5. Preparing to send data to backend:', electionDataForBackend);
       const response = await fetch('/api/admin/elections', {
         method: 'POST',
         headers: {
@@ -199,20 +209,22 @@ const CreateElection = ({ onElectionCreated }) => {
       }
 
       toast.success(`¡Elección #${electionId} creada y registrada con éxito! Todos los candidatos han sido añadidos.`);
+      console.log('[CreateElection] 6. Backend registration successful. Response from backend:', result);
       if (onElectionCreated) {
         onElectionCreated(result);
       }
 
     } catch (err) {
-      if (err.code === 4001) { // MetaMask user rejected transaction
-        toast.error("Transacción rechazada por el usuario.");
-      } else {
-        setError(err.message || 'Ocurrió un error inesperado.');
-        toast.error(err.message || 'Error al crear la elección');
-        console.error("Error en handleSubmit de CreateElection:", err);
-      }
+      console.error('[CreateElection] CRITICAL ERROR in handleSubmit:', err);
+      let detailedMessage = err.message;
+      if (err.reason) detailedMessage = err.reason; // Ethers.js specific revert reason
+      if (err.data && err.data.message) detailedMessage = err.data.message; // Ethers.js JSON-RPC error
+
+      setError(`Error detallado: ${detailedMessage}`);
+      toast.error(`Error: ${detailedMessage}`);
     } finally {
       setLoading(false);
+      console.log('[CreateElection] 7. handleSubmit finished.');
     }
   };
 

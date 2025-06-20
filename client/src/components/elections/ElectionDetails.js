@@ -30,13 +30,15 @@ const ElectionDetails = () => {
     try {
       setLoading(true);
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections/${id}`);
-      const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to fetch election details');
-      setElection(data.data);
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        throw new Error(json.message || 'Error al obtener los detalles de la elección');
+      }
+      setElection(json.data); // Correctly access the 'data' key
       setError('');
     } catch (err) {
       console.error('Error fetching election details:', err);
-      setError('Failed to load election details. Please try again later.');
+      setError(err.message || 'No se pudieron cargar los detalles de la elección.');
     } finally {
       setLoading(false);
     }
@@ -110,11 +112,19 @@ const ElectionDetails = () => {
     }
   };
 
-  const getStatusBadge = () => {
-    if (!election) return null;
-    if (isElectionActive(election)) return <Badge bg="success">{t('elections.status.active')}</Badge>;
-    if (hasElectionEnded(election)) return <Badge bg="secondary">{t('elections.status.ended')}</Badge>;
-    return <Badge bg="warning">{t('elections.status.upcoming')}</Badge>;
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'active': return <Badge bg="success">Activa</Badge>;
+      case 'finalized': return <Badge bg="secondary">Finalizada</Badge>;
+      case 'upcoming': return <Badge bg="warning">Próxima</Badge>;
+      default: return <Badge bg="light">Desconocido</Badge>;
+    }
   };
 
   if (loading) {
@@ -130,18 +140,21 @@ const ElectionDetails = () => {
   }
 
   const renderVotingActions = () => {
-    if (!isAuthenticated) return <Alert variant="info">Please connect your wallet to participate.</Alert>;
-    if (voterStatus.hasVoted) return <Alert variant="success">You have already voted in this election.</Alert>;
-    if (hasElectionEnded(election)) return <Alert variant="secondary">This election has ended.</Alert>;
-    if (!isElectionActive(election)) return <Alert variant="info">This election has not started yet.</Alert>;
-    if (isCheckingToken) return <div className="text-center"><Spinner animation="grow" size="sm" /> Verifying token...</div>;
-    if (!hasVotingToken) return <Alert variant="warning">You do not have the required token to vote in this election.</Alert>;
+    if (!isAuthenticated) return <Alert variant="info">Por favor, conecta tu billetera para participar.</Alert>;
+    if (voterStatus.hasVoted) return <Alert variant="success">Ya has votado en esta elección.</Alert>;
+    if (election.status === 'finalized') return <Alert variant="secondary">Esta elección ha finalizado.</Alert>;
+    if (election.status === 'upcoming') return <Alert variant="info">Esta elección aún no ha comenzado.</Alert>;
+    if (isCheckingToken) return <div className="text-center"><Spinner animation="grow" size="sm" /> Verificando token...</div>;
+    if (!hasVotingToken && election.status === 'active') return <Alert variant="warning">No tienes el token necesario para votar.</Alert>;
 
-    return (
-      <Button onClick={handleVote} disabled={isVoting || !selectedCandidateId} className="w-100" size="lg">
-        {isVoting ? <><Spinner as="span" animation="border" size="sm" /> Submitting Vote...</> : 'Cast Your Vote'}
-      </Button>
-    );
+    if (election.status === 'active') {
+      return (
+        <Button onClick={handleVote} disabled={isVoting || !selectedCandidateId} className="w-100" size="lg">
+          {isVoting ? <><Spinner as="span" animation="border" size="sm" /> Enviando Voto...</> : 'Emitir Voto'}
+        </Button>
+      );
+    }
+    return null;
   };
 
   return (
@@ -151,13 +164,13 @@ const ElectionDetails = () => {
           <Card className="shadow-sm">
             <Card.Header as="h4" className="d-flex justify-content-between align-items-center bg-light">
               {election.title}
-              {getStatusBadge()}
+              {getStatusBadge(election.status)}
             </Card.Header>
             <Card.Body>
               <Card.Text>{election.description}</Card.Text>
               <Row>
-                <Col md={6}><strong>Start:</strong> {formatTimestamp(election.startTime)}</Col>
-                <Col md={6}><strong>End:</strong> {formatTimestamp(election.endTime)}</Col>
+                <Col md={6}><strong>Inicio:</strong> {formatDate(election.startDate)}</Col>
+                <Col md={6}><strong>Fin:</strong> {formatDate(election.endDate)}</Col>
               </Row>
             </Card.Body>
           </Card>
@@ -179,7 +192,7 @@ const ElectionDetails = () => {
                         id={`candidate-${candidate.id}`}
                         value={candidate.id}
                         onChange={(e) => setSelectedCandidateId(e.target.value)}
-                        disabled={voterStatus.hasVoted || !isElectionActive(election) || !hasVotingToken || isVoting}
+                        disabled={voterStatus.hasVoted || election.status !== 'active' || !hasVotingToken || isVoting}
                         className="me-3"
                       />
                       <div>
@@ -204,9 +217,9 @@ const ElectionDetails = () => {
             </Card.Body>
           </Card>
 
-          {(hasElectionEnded(election) || election.resultsFinalized) && (
-            <Button as={Link} to={`/elections/${election.id}/results`} variant="outline-primary" className="w-100 mt-3">
-              View Results
+          {election.status === 'finalized' && (
+            <Button as={Link} to={`/elections/${election._id}/results`} variant="outline-primary" className="w-100 mt-3">
+              Ver Resultados
             </Button>
           )}
         </Col>

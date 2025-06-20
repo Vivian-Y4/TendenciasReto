@@ -64,45 +64,32 @@ const setupProvider = () => {
  * @access  Público (con comportamiento de filtro si usuario autenticado)
  */
 const getElections = async (req, res, next) => {
-  console.log('[ElectionCtrl] getElections endpoint hit (MongoDB version).');
+  console.log('[ElectionCtrl] getElections endpoint hit (simplified).');
   try {
-    const baseQuery = { status: 'active' }; // Default to active elections
-    let electionQuery = {};
+    // Devolver todas las elecciones activas, sin filtrar por provincia en el backend.
+    // El frontend puede decidir cómo filtrar si es necesario en el futuro.
+        // Devolver elecciones próximas y activas.
+    const electionsFromDB = await Election.find({ status: { $in: ['upcoming', 'active', 'finalized'] } })
+      .sort({ startDate: -1 })
+      .lean();
 
-    // req.user is populated by the authenticate middleware
-    if (req.user && req.user.province) {
-      const userProvince = req.user.province;
-      console.log(`[ElectionCtrl] Authenticated user. Province: ${userProvince}`);
-      electionQuery = {
-        ...baseQuery,
-        $or: [
-          { level: 'presidencial' },
-          {
-            level: { $in: ['senatorial', 'diputados', 'municipal'] },
-            province: userProvince
-          }
-        ]
-      };
-    } else {
-      // User not authenticated or no province information in token
-      console.log('[ElectionCtrl] Unauthenticated user or no province in token.');
-      electionQuery = {
-        ...baseQuery,
-        level: 'presidencial',
-        // isPublic: true, // Consider adding an isPublic field to your Election model if needed
-      };
-    }
+    const formattedElections = electionsFromDB.map(election => ({
+      _id: election._id.toString(), // Crucial for frontend links
+      id: election.contractElectionId ? election.contractElectionId.toString() : 'N/A',
+      title: election.title,
+      description: election.description,
+      startDate: election.startDate.toISOString(),
+      endDate: election.endDate.toISOString(),
+      status: election.status,
+      // Simplificado para no devolver todos los candidatos en la lista principal
+      candidateCount: election.candidates ? election.candidates.length : 0,
+      totalVotes: election.totalVotes || 0,
+    }));
 
-    const elections = await Election.find(electionQuery)
-      .sort({ startDate: 1 })
-      .select('_id title description level province startDate endDate status contractAddress blockchainId additionalInfo') // Select specific fields
-      .lean(); // Use .lean() for faster queries if not modifying the docs
-
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Lista de elecciones obtenida.",
-      count: elections.length,
-      data: elections
+      message: 'Elecciones recuperadas con éxito.',
+      data: formattedElections,
     });
   } catch (error) {
     console.error(`[ElectionCtrl] Error en getElections (MongoDB): ${error.message}`, error.stack);
@@ -116,98 +103,47 @@ const getElections = async (req, res, next) => {
  * @access  Público
  */
 const getElection = async (req, res, next) => {
-  const mongoElectionId = req.params.id;
-  console.log(`[ElectionCtrl] getElection endpoint hit for MongoDB ID: ${mongoElectionId}.`);
-
-  let contract; // For contract interactions if any
+  const { id } = req.params;
+  console.log(`[ElectionCtrl] getElection endpoint hit for MongoDB ID: ${id}.`);
 
   try {
-    const election = await Election.findById(mongoElectionId).lean();
+    const election = await Election.findById(id).lean();
 
     if (!election) {
-      return next(new AppError('Elección no encontrada en la base de datos.', 404));
+      return next(new AppError('Elección no encontrada.', 404));
     }
 
-    let candidatesFromContract = [];
-    let contractSummaryData = {};
-
-    // If there's a blockchainId, try to fetch supplementary data from contract
-    if (election.blockchainId) {
-      console.log(`[ElectionCtrl] Fetching supplementary contract data for blockchainId: ${election.blockchainId}`);
-      try {
-        const numericBlockchainId = ethers.BigNumber.from(election.blockchainId);
-        const { provider, contractABI, contractAddress } = setupProvider(); // setupProvider might be reused
-        contract = new ethers.Contract(contractAddress, contractABI, provider);
-
-    // --- Validación temprana para evitar reverts del contrato ---
-    const electionCount = (await contract.electionCount()).toNumber();
-    const idNumber = numericElectionId.toNumber();
-    if (idNumber === 0 || idNumber > electionCount) {
-      return next(new AppError(`La elección con ID ${idNumber} no existe.`, 404));
-    }
-
-        const summary = await contract.getElectionSummary(numericBlockchainId);
-
-        // Populate contractSummaryData from summary
-        contractSummaryData = {
-          // id: summary.id.toString(), // This would be blockchainId, already in election doc
-          // title: summary.title, // Prefer DB version
-          // description: summary.description, // Prefer DB version
-          startTimeContract: summary.startTime.toString(), // Distinguish from DB startDate
-          endTimeContract: summary.endTime.toString(), // Distinguish from DB endDate
-          isActiveContract: summary.isActive,
-          candidateCountContract: summary.candidateCount.toString(),
-          totalVotesContract: summary.totalVotes.toString(),
-          resultsFinalizedContract: summary.resultsFinalized,
-          creatorContract: summary.creator,
-        };
-
-        const candidateCount = summary.candidateCount.toNumber();
-        for (let i = 0; i < candidateCount; i++) {
-          const candidateData = await contract.getCandidate(numericBlockchainId, i);
-          candidatesFromContract.push({
-            id: i, // Candidate index in contract
-            name: candidateData[0],
-            description: candidateData[1],
-            voteCount: candidateData[2].toString(),
-          });
-        }
-      } catch (contractError) {
-        console.warn(`[ElectionCtrl] Could not fetch supplementary data from contract for election ${mongoElectionId} (blockchainId ${election.blockchainId}): ${contractError.message}`);
-        // Do not fail the request if contract data is unavailable, but log it.
-        // The primary data source is MongoDB.
-      }
-    }
-    
-    // Combine MongoDB data with contract data (candidates)
-    const responseData = {
-      ...election, // Spread MongoDB election document (includes _id, title, description, merkleRoot, etc.)
-      candidates: candidatesFromContract.length > 0 ? candidatesFromContract : election.candidates || [], // Prioritize contract candidates if available
-      // Optionally, include other specific contract data if needed, e.g., contractSummaryData
+    // Format data consistently with getElections
+    const formattedElection = {
+      _id: election._id.toString(),
+      id: election.contractElectionId ? election.contractElectionId.toString() : 'N/A',
+      title: election.title,
+      description: election.description,
+      startDate: election.startDate.toISOString(),
+      endDate: election.endDate.toISOString(),
+      electoralLevel: election.electoralLevel,
+      province: election.province,
+      status: election.status,
+      candidates: Array.isArray(election.candidates) ? election.candidates.map(c => ({ 
+        id: c._id.toString(), 
+        name: c.name, 
+        votes: c.votes || 0 
+      })) : [],
+      totalVotes: election.totalVotes || 0,
     };
-    // Ensure _id is stringified if not already by .lean() and spread
-    responseData._id = responseData._id.toString();
 
-
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Detalles de la elección obtenidos.",
-      election: responseData // Client expects data under 'election' key
+      message: 'Detalles de la elección obtenidos con éxito.',
+      data: formattedElection, // Send data under 'data' key
     });
 
   } catch (error) {
-    console.error(`[ElectionCtrl] Error en getElection (ID: ${mongoElectionId}): ${error.message}`, error.stack);
+    console.error(`[ElectionCtrl] Error en getElection (ID: ${id}): ${error.message}`, error.stack);
     if (error.name === 'CastError' && error.kind === 'ObjectId') {
-        return next(new AppError('ID de elección con formato inválido.', 400));
+      return next(new AppError('ID de elección con formato inválido.', 400));
     }
-    // Attempt to parse contract error if it happened and contract object is defined
-    if (error.data && contract) {
-        try {
-            const reason = contract.interface.parseError(error.data).name;
-            return next(new AppError(`Error de contrato al obtener detalles de elección ${mongoElectionId}: ${reason}`, 500));
-        } catch (parseError) { /* ignore */ }
-    }
-    next(new AppError(`Error al obtener detalles de elección ${mongoElectionId}: ${error.message}`, 500));
+    next(new AppError(`Error al obtener los detalles de la elección: ${error.message}`, 500));
   }
 };
 

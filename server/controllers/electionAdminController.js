@@ -94,6 +94,7 @@ const handleContractError = (error, contract, next, transactionHash = null) => {
  * @access  Privado (Admin)
  */
 const createElection = async (req, res, next) => {
+  console.log('Received data for new election in backend:', JSON.stringify(req.body, null, 2));
   const {
     id, // ID desde la blockchain
     title,
@@ -102,7 +103,7 @@ const createElection = async (req, res, next) => {
     endDate,
     electoralLevel,
     province,
-    candidates // ¡Aquí están nuestros candidatos!
+    candidates, // Array of candidate names
   } = req.body;
 
   // Validar que el ID de la blockchain está presente
@@ -111,12 +112,12 @@ const createElection = async (req, res, next) => {
   }
 
   // Validaciones básicas
-  if (!id || !title || !startDate || !endDate || !electoralLevel) {
-    return next(new AppError('Faltan campos requeridos para registrar la elección en el backend.', 400));
+  if (!id || !title || !description || !startDate || !endDate || !electoralLevel || !candidates) {
+    return next(new AppError('Todos los campos, incluidos los candidatos, son obligatorios.', 400));
   }
 
-  if (!candidates || !Array.isArray(candidates) || candidates.length < 2) {
-    return next(new AppError('Se requiere una lista de al menos dos candidatos.', 400));
+  if (!Array.isArray(candidates) || candidates.length < 2) {
+    return next(new AppError('Se requieren al menos dos candidatos para crear una elección.', 400));
   }
 
   const session = await mongoose.startSession();
@@ -148,8 +149,13 @@ const createElection = async (req, res, next) => {
       electoralLevel,
       province: electoralLevel === 'Presidencial' ? null : province,
       status: 'active', // Asumimos que si se registra desde el front, ya está activa en el contrato
-      candidates: candidates.map(name => ({ name: name })) // Mapeamos los nombres al formato del schema
     });
+
+    // Map candidate names to the required schema format
+    if (candidates && Array.isArray(candidates)) {
+      newElection.candidates = candidates.map(name => ({ name: name }));
+    }
+
     await newElection.save({ session });
 
     // 3. Log de actividad
@@ -161,7 +167,7 @@ const createElection = async (req, res, next) => {
     });
 
     await session.commitTransaction();
-    res.status(201).json({ success: true, data: newElection });
+    res.status(201).json({ success: true, data: newElection, debug_received_candidates: req.body.candidates || 'Not Received' });
 
   } catch (error) {
     await session.abortTransaction();
@@ -199,11 +205,11 @@ const addCandidateToElection = async (req, res, next) => {
     console.log(`[ElectionAdminCtrl] addCandidate TX sent. Hash: ${tx.hash}. Waiting...`);
     const receipt = await tx.wait();
     console.log(`[ElectionAdminCtrl] addCandidate TX confirmed. Block: ${receipt.blockNumber}, Gas: ${receipt.gasUsed.toString()}`);
-      
+
     const event = receipt.events?.find(e => e.event === 'CandidateAdded');
     const blockchainCandidateId = event && event.args ? (event.args.candidateId ? event.args.candidateId.toString() : (event.args[1] ? event.args[1].toString() : null)) : null;
     console.log(`[ElectionAdminCtrl] Blockchain Candidate ID: ${blockchainCandidateId}`);
-      
+
     if (req.user && ActivityLog) {
         try {
             await ActivityLog.logActivity({

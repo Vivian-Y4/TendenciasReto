@@ -11,6 +11,7 @@ const adminStatsRoutes = require('./server/routes/adminStatistics');
 const adminActivityRoutes = require('./server/routes/activityLog');
 const jceVoterRegistryRoutes = require('./server/routes/jceVoterRegistry'); // Added JCE routes
 const candidateAdminRoutes = require('./server/routes/candidateAdmin');
+const { listenForElections } = require('./server/services/blockchainListener');
 
 const app = express();
 
@@ -27,7 +28,10 @@ app.use(express.json());
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://nateravivi:7l8FK20TtFeWhzeP@cluster0.vrk8zps.mongodb.net/voting-platform')
-.then(() => console.log('MongoDB Connected'))
+.then(() => {
+  console.log('MongoDB Connected');
+  listenForElections(); // Iniciar el listener de eventos de la blockchain
+})
 .catch(err => console.log('MongoDB Connection Error:', err));
 
 // --- RUTAS PRINCIPALES ---

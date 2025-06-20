@@ -132,7 +132,7 @@ const electionSchema = new mongoose.Schema({
   // Estado
   status: {
     type: String,
-    enum: ['draft', 'active', 'suspended', 'closed', 'canceled'],
+    enum: ['draft', 'upcoming', 'active', 'suspended', 'ended', 'canceled'],
     default: 'draft',
     index: true
   },
@@ -261,6 +261,28 @@ electionSchema.index({ startDate: 1, endDate: 1 });
 electionSchema.index({ status: 1, isPublic: 1 });
 electionSchema.index({ 'categories.categoryId': 1 });
 
+// Hook para actualizar el estado automáticamente antes de guardar
+electionSchema.pre('save', function(next) {
+  const election = this;
+  const now = new Date();
+
+  // No actualizar si el estado es manual (suspendido, cancelado)
+  if (['suspended', 'canceled'].includes(election.status)) {
+    return next();
+  }
+
+  if (election.endDate && now >= election.endDate) {
+    election.status = 'ended';
+  } else if (election.startDate && now >= election.startDate) {
+    election.status = 'active';
+  } else {
+    // Si la fecha de inicio es futura, es 'upcoming'
+    election.status = 'upcoming';
+  }
+  
+  next();
+});
+
 /**
  * Método para verificar si una elección está activa
  * @returns {Boolean} true si la elección está activa según fechas y estado
@@ -360,12 +382,13 @@ electionSchema.methods.updateResults = function(results) {
  */
 electionSchema.methods.changeStatus = function(newStatus, admin) {
   // Validar estado
-  if (!['draft', 'active', 'suspended', 'closed', 'canceled'].includes(newStatus)) {
+  const validStatuses = ['draft', 'upcoming', 'active', 'suspended', 'ended', 'canceled'];
+  if (!validStatuses.includes(newStatus)) {
     throw new Error('Estado de elección inválido');
   }
   
   // Si se está cerrando la elección, establecer fecha de cierre
-  if (newStatus === 'closed' && this.status !== 'closed') {
+  if (newStatus === 'ended' && this.status !== 'ended') {
     this.actualEndDate = new Date();
   }
   

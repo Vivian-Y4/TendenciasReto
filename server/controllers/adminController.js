@@ -278,6 +278,7 @@ exports.createElection = async (req, res) => {
       registrationDeadline,
       isPublic = true,
       requiresRegistration = true,
+      candidates, // <-- Receive candidates array
     } = req.body;
 
     // Explicit validation to provide a clear error message, addressing the user's issue.
@@ -298,6 +299,8 @@ exports.createElection = async (req, res) => {
       registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
       isPublic,
       requiresRegistration,
+      // Add candidates if they exist
+      candidates: Array.isArray(candidates) ? candidates.map(name => ({ name })) : [],
       createdBy: req.user?.id || req.admin?.id,
       status: 'draft'
     };
