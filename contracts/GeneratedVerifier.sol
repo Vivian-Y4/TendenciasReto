@@ -15,7 +15,7 @@ contract GeneratedVerifier { // Typically named 'Verifier' by snarkjs, renamed h
         uint256[2][] IC; // Array of G1 points for public inputs
     }
 
-    VerifyingKey public immutable vk;
+    VerifyingKey internal vk;
     uint256 public constant PUBLIC_INPUT_COUNT = 3; // merkleRoot, nullifierHash, voteCommitment
 
     // Pairing precompile address

@@ -129,32 +129,45 @@ function App() {
     }
   }, []);
   const handleLoginSuccess = useCallback(async (address, provider, signer, cedula, province) => {
+    if (!provider || !signer) {
+      toast.error("Error: El proveedor de Web3 o el firmante no están disponibles.");
+      return;
+    }
     setLoading(true);
-    setProvider(provider);
-    setSigner(signer);
-    setUserAddress(address);
-    setUserName(address.substring(0, 6) + '...' + address.substring(address.length - 4));
-  
+
     try {
-      // Use the new VotingSystem ABI
+      // Verificar la red de MetaMask
+      const network = await provider.getNetwork();
+      // El ID de la red para la red de pruebas Sepolia es 11155111.
+      const expectedNetworkId = 11155111;
+
+      if (network.chainId !== expectedNetworkId) {
+        toast.error(`Por favor, conecta tu MetaMask a la red correcta. Se esperaba la red ${expectedNetworkId} pero estás en la ${network.chainId}.`);
+        setLoading(false);
+        return;
+      }
+
+      setProvider(provider);
+      setSigner(signer);
+      setUserAddress(address);
+      setUserName(address.substring(0, 6) + '...' + address.substring(address.length - 4));
+
+      // Instanciar contratos
       const votingContract = new ethers.Contract(
-        process.env.REACT_APP_VOTING_ADDRESS, // Ensure this is set in client .env
-        VotingSystemWithTokenABI.abi, // Use Token version's ABI
+        process.env.REACT_APP_VOTING_ADDRESS,
+        VotingSystemWithTokenABI.abi,
         signer
       );
       setContract(votingContract);
 
-      // Set voterIdentifier to the user's Ethereum address, as VotingSystem_WithToken uses msg.sender
       if (address) {
         setVoterIdentifier(address);
         console.log("Voter Identifier set in context (using user address):", address);
       } else {
-        // This case should ideally not happen if login was successful
         toast.warn("No se pudo obtener la dirección del usuario para el identificador de votante.");
         setVoterIdentifier(null);
       }
 
-      // Token contract (if still needed for other parts of the app)
       if (process.env.REACT_APP_TOKEN_ADDRESS && VotingToken && VotingToken.abi) {
         const tokenContractInstance = new ethers.Contract(
           process.env.REACT_APP_TOKEN_ADDRESS,
@@ -165,9 +178,8 @@ function App() {
       } else {
         console.warn("Token contract address or ABI not fully configured if it's optional.");
       }
-  
-      // Verifica admin (using admin() from VotingSystem_WithToken)
-      const contractAdmin = await votingContract.admin(); // Call admin() getter
+
+      const contractAdmin = await votingContract.admin();
       setIsAdmin(address.toLowerCase() === contractAdmin.toLowerCase());
       setIsAuthenticated(true);
       toast.success('Sesión iniciada y wallet conectada');
@@ -176,10 +188,64 @@ function App() {
     } catch (error) {
       toast.error(`Error cargando contratos o datos iniciales: ${error.message}`);
       console.error("Error in handleLoginSuccess:", error);
-      console.log("VOTING ADDRESS:", process.env.REACT_APP_VOTING_ADDRESS);
-      console.log("VOTING ABI used:", VotingSystemWithTokenABI.abi ? 'Loaded' : 'Not Loaded'); // Updated log
-      console.log("TOKEN ADDRESS:", process.env.REACT_APP_TOKEN_ADDRESS);
-      console.log("Signer:", signer);
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  const connectWalletForAdmin = useCallback(async (expectedAdminAddress) => {
+    if (!expectedAdminAddress) {
+      toast.error("No se ha proporcionado una dirección de administrador para la verificación.");
+      return null;
+    }
+    setLoading(true);
+    try {
+      if (!window.ethereum) {
+        toast.error("MetaMask no está instalado.");
+        setLoading(false);
+        return null;
+      }
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const accounts = await provider.send('eth_requestAccounts', []);
+      const connectedAddress = accounts[0];
+
+      // Verificación: la cuenta conectada debe ser la del administrador
+      if (expectedAdminAddress && connectedAddress.toLowerCase() !== expectedAdminAddress.toLowerCase()) {
+        toast.error(`La billetera conectada (${connectedAddress.substring(0, 6)}...) no es la billetera del administrador. Por favor, seleccione la cuenta correcta en MetaMask.`);
+        setLoading(false);
+        return null;
+      }
+
+      const signer = provider.getSigner();
+      
+      const network = await provider.getNetwork();
+      const SEPOLIA_CHAIN_ID = 11155111;
+
+      if (network.chainId !== SEPOLIA_CHAIN_ID) {
+        toast.error("Por favor, conéctate a la red de Sepolia en MetaMask.");
+        setLoading(false);
+        return null;
+      }
+      
+      const votingSystemContract = new ethers.Contract(
+        process.env.REACT_APP_VOTING_ADDRESS,
+        VotingSystemWithTokenABI.abi,
+        signer
+      );
+      
+      setContract(votingSystemContract);
+      setSigner(signer);
+      setProvider(provider);
+      setIsAuthenticated(true); 
+      setUserAddress(connectedAddress);
+      
+      toast.success("Billetera de administrador conectada exitosamente.");
+      return votingSystemContract; // Devolver la instancia del contrato
+    } catch (error) {
+      console.error("Error conectando la billetera para el admin:", error);
+      toast.error("Error al conectar la billetera.");
+      return null; // Devolver null en caso de error
     } finally {
       setLoading(false);
     }
@@ -208,6 +274,7 @@ function App() {
       isAdmin,
       login,
       logout,
+      connectWalletForAdmin,
       provider,
       signer,
       contract, // Main VotingSystem contract

@@ -97,6 +97,54 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+exports.updateProfile = async (req, res) => {
+  try {
+    const { walletAddress } = req.body;
+    const adminId = req.admin.id;
+
+    // Validación básica de la dirección de Ethereum
+    const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+    if (!walletAddress || !ethAddressPattern.test(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        message: 'La dirección de la billetera proporcionada es inválida.'
+      });
+    }
+
+    const admin = await Admin.findById(adminId);
+
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Administrador no encontrado' 
+      });
+    }
+
+    admin.walletAddress = walletAddress;
+    await admin.save();
+
+    res.json({
+      success: true,
+      message: 'Perfil actualizado exitosamente.',
+      admin: {
+        id: admin._id,
+        username: admin.username,
+        name: admin.name,
+        walletAddress: admin.walletAddress,
+        permissions: admin.permissions
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar el perfil del administrador:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error del servidor al actualizar el perfil.',
+      error: error.message
+    });
+  }
+};
+
 // --- NONCE & SIGNATURE ---
 exports.getNonce = async (req, res) => {
   try {

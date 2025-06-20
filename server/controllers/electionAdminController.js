@@ -72,6 +72,8 @@ const getAdminWallet = (provider) => {
     return new ethers.Wallet(process.env.ADMIN_SIGNER_PRIVATE_KEY, provider);
 };
 
+
+
 const handleContractError = (error, contract, next, transactionHash = null) => {
     console.error("[ContractCallError] Details:", error);
     let revertReason = error.message;
@@ -92,56 +94,78 @@ const handleContractError = (error, contract, next, transactionHash = null) => {
  * @access  Privado (Admin)
  */
 const createElection = async (req, res, next) => {
+  const {
+    id, // ID desde la blockchain
+    title,
+    description,
+    startDate,
+    endDate,
+    electoralLevel,
+    province,
+    candidates // ¡Aquí están nuestros candidatos!
+  } = req.body;
+
+  // Validar que el ID de la blockchain está presente
+  if (!id) {
+    return next(new AppError('El ID de la elección de la blockchain es requerido.', 400));
+  }
+
+  // Validaciones básicas
+  if (!id || !title || !startDate || !endDate || !electoralLevel) {
+    return next(new AppError('Faltan campos requeridos para registrar la elección en el backend.', 400));
+  }
+
+  if (!candidates || !Array.isArray(candidates) || candidates.length < 2) {
+    return next(new AppError('Se requiere una lista de al menos dos candidatos.', 400));
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
-  try {
-    const {
-      title,
-      description,
-      electoralLevel, // Added field
-      province, // Added field
-      startDate,
-      endDate,
-      registrationDeadline,
-      isPublic = true,
-      requiresRegistration = true,
-      categories: categoryIds,
-      settings: settingsData
-    } = req.body;
 
-    if (!title || !description || !electoralLevel || !startDate || !endDate) {
-      throw new AppError('Título, descripción, nivel electoral, fecha de inicio y fin son obligatorios.', 400);
+  try {
+    // Verificar si la elección ya fue registrada para evitar duplicados
+    const existingElection = await Election.findOne({ contractElectionId: id }).session(session);
+    if (existingElection) {
+      // Si ya existe, simplemente retornamos éxito para no interrumpir el flujo del frontend
+      await session.abortTransaction();
+      return res.status(200).json({ success: true, message: 'La elección ya estaba registrada.', data: existingElection });
     }
 
+    // 1. Crear la categoría electoral si es necesario
+    let category = await ElectoralCategory.findOne({ level: electoralLevel, province: province || null }).session(session);
+    if (!category) {
+      category = new ElectoralCategory({ level: electoralLevel, province: province || null });
+      await category.save({ session });
+    }
+
+    // 2. Crear la elección en la base de datos con el ID de la blockchain
     const newElection = new Election({
+      contractElectionId: id.toString(),
       title,
       description,
-      electoralLevel, // Save the field
-      province, // Save the field
       startDate: new Date(startDate),
       endDate: new Date(endDate),
-      registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
-      isPublic,
-      requiresRegistration,
-      createdBy: req.user.id,
-      status: 'draft',
+      electoralLevel,
+      province: electoralLevel === 'Presidencial' ? null : province,
+      status: 'active', // Asumimos que si se registra desde el front, ya está activa en el contrato
+      candidates: candidates.map(name => ({ name: name })) // Mapeamos los nombres al formato del schema
     });
-
     await newElection.save({ session });
 
+    // 3. Log de actividad
     await ActivityLog.logActivity({
-        user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
-        action: 'election_create',
-        resource: { type: 'Election', id: newElection._id, name: newElection.title },
-        details: `Elección creada en estado 'borrador'.`
-    }, { session });
+      user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
+      action: 'election_registered_from_blockchain',
+      resource: { type: 'Election', id: newElection._id.toString(), name: newElection.title },
+      details: { contractId: id, startDate: newElection.startDate, endDate: newElection.endDate, level: category.level }
+    });
 
     await session.commitTransaction();
-    res.status(201).json({ success: true, message: 'Elección creada exitosamente.', data: newElection });
+    res.status(201).json({ success: true, data: newElection });
 
   } catch (error) {
     await session.abortTransaction();
-    next(error instanceof AppError ? error : new AppError('Error al crear la elección: ' + error.message, 500));
+    next(new AppError('Error al registrar la elección en el backend: ' + error.message, 500));
   } finally {
     session.endSession();
   }
@@ -359,8 +383,8 @@ const getElections = async (req, res, next) => {
     // Simplified enrichment for brevity for this phase
     const enrichedElections = elections.map(e => ({ ...e.toObject(), candidateCount: 0, voterCount: 0, currentStatus: e.status }));
 
-    res.status(200).json({
-      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), data: enrichedElections
+        res.status(200).json({
+      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), elections: enrichedElections
     });
   } catch (error) {
     next(new AppError(`Error al obtener elecciones (MongoDB): ${error.message}`, 500));

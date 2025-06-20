@@ -107,6 +107,13 @@ router.post('/verify-signature', validateSignatureRequest, adminController.verif
 router.get('/profile', adminAuth, adminController.getProfile);
 
 /**
+ * @route   PUT /api/admin/profile
+ * @desc    Actualizar el perfil del administrador (ej. wallet)
+ * @access  Privado (solo admin)
+ */
+router.put('/profile', adminAuth, adminController.updateProfile);
+
+/**
  * @route   GET /api/admin/test
  * @desc    Ruta de prueba para verificar que la API de admin funciona
  * @access  Público

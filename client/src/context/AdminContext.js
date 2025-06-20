@@ -121,6 +121,19 @@ export const AdminProvider = ({ children }) => {
     setAdminPermissions(permissions);
   };
 
+  const updateAdminWallet = async (walletAddress) => {
+    try {
+      const result = await adminService.updateWalletAddress(walletAddress);
+      if (result.success) {
+        setAdminWalletAddress(walletAddress);
+      }
+      return result;
+    } catch (error) {
+      console.error('Error al actualizar la billetera del administrador:', error);
+      return { success: false, error: error.message || 'Error desconocido' };
+    }
+  };
+
   return (
     <AdminContext.Provider
       value={{
@@ -131,7 +144,8 @@ export const AdminProvider = ({ children }) => {
         adminPermissions,
         adminLoading,
         adminLogin,
-        adminLogout
+        adminLogout,
+        updateAdminWallet
       }}
     >
       {children}

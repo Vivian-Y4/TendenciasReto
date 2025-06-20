@@ -17,42 +17,49 @@ const ElectionList = () => {
   }, [contract]);
 
   const fetchElections = async () => {
+    if (!contract) {
+      setError("El contrato no está disponible. Por favor, conecta tu billetera primero.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
+
+      const count = await contract.electionCount();
+      const totalElections = count.toNumber();
       
-      console.log('Fetching elections from:', `${process.env.REACT_APP_API_URL}/api/elections`);
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections`);
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-      
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || 'Failed to fetch elections');
-      }
-      
-      // Adjust according to backend response structure, assuming it's in data.data now
-      if (data.data && data.data.length === 0) {
+      if (totalElections === 0) {
         setElections([]);
-        setError('No elections available at the moment.');
-      } else if (data.data) {
-        setElections(data.data);
-      } else {
-        // Fallback if data.data is not present but data.elections might be (old structure)
-        if (data.elections && data.elections.length === 0) {
-            setElections([]);
-            setError('No elections available at the moment (fallback check).');
-        } else if (data.elections) {
-            console.warn("Using fallback data.elections, backend should be updated to use data.data");
-            setElections(data.elections);
-        } else {
-            setElections([]);
-            setError('Election data is not in the expected format.');
-        }
+        setError('Aún no se han creado elecciones en la blockchain.');
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching elections:', error);
-      setError('An error occurred while loading elections. Please try again later.');
+
+      const electionPromises = [];
+      // Los IDs de las elecciones en el contrato van de 1 a electionCount
+      for (let i = 1; i <= totalElections; i++) {
+        electionPromises.push(contract.elections(i));
+      }
+
+      const resolvedElections = await Promise.all(electionPromises);
+
+      const formattedElections = resolvedElections.map((election, index) => ({
+        id: index + 1, // El ID es el índice del bucle + 1
+        title: election.title,
+        description: election.description,
+        startTime: election.startTime.toNumber(),
+        endTime: election.endTime.toNumber(),
+        candidateCount: election.candidateCount.toNumber(),
+        totalVotes: election.totalVotes.toNumber(),
+      }));
+      
+      setElections(formattedElections);
+
+    } catch (e) {
+      console.error('Error al obtener las elecciones del contrato:', e);
+      setError('Ocurrió un error al cargar las elecciones desde la blockchain. Por favor, revisa la consola para más detalles.');
     } finally {
       setLoading(false);
     }

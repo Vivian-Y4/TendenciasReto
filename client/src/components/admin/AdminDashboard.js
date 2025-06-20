@@ -23,7 +23,10 @@ import StatsDashboard from "./stats/StatsDashboard";
 import axios from "axios";
 import AssignTokens from './AssignTokens';
 import ManageCandidates from './ManageCandidates';
+import CreateElection from './CreateElection';
 import { PROVINCES } from '../../constants/provinces';
+import { setupWeb3Provider } from "../../utils/web3Utils";
+import { getContractInstance } from "../../utils/contractUtils";
 
 // Helper function for translations
 function accionEnEspanol(action) {
@@ -40,7 +43,7 @@ function accionEnEspanol(action) {
 }
 
 const AdminDashboard = () => {
-  const [elections, setElections] = useState([]);
+  // const [elections, setElections] = useState([]);
   const [voterStats, setVoterStats] = useState({ totalRegistered: 0, totalVoted: 0 });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -49,19 +52,9 @@ const AdminDashboard = () => {
   const { isAdminAuthenticated, adminPermissions, adminLogout } = useContext(AdminContext);
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
-  
-  // State for Create Election Modal
-  const [showCreateElectionModal, setShowCreateElectionModal] = useState(false);
-  const [newElectionTitle, setNewElectionTitle] = useState("");
-  const [newElectionDescription, setNewElectionDescription] = useState("");
-  const [newElectionStartDate, setNewElectionStartDate] = useState("");
-  const [newElectionEndDate, setNewElectionEndDate] = useState("");
-  const [newElectionStartTime, setNewElectionStartTime] = useState("");
-  const [newElectionEndTime, setNewElectionEndTime] = useState("");
-  const [newElectionLevel, setNewElectionLevel] = useState("");
-  const [newElectionProvince, setNewElectionProvince] = useState("");
 
-  // State for Edit Election Modal
+  // State for Modals
+  const [showCreateElectionModal, setShowCreateElectionModal] = useState(false);
   const [showEditElectionModal, setShowEditElectionModal] = useState(false);
   const [editElectionId, setEditElectionId] = useState(null);
   const [editElectionTitle, setEditElectionTitle] = useState("");
@@ -78,22 +71,24 @@ const AdminDashboard = () => {
   const canFinalizeResults = adminPermissions?.canFinalizeResults;
 
   const fetchElections = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("adminToken");
-      const res = await axios.get("/api/admin/elections", { headers: { "x-auth-token": token } });
-      setElections(res.data.elections || res.data.data || []);
-    } catch (error) {
-      setError("Error al cargar las elecciones");
-    }
+    // La funcionalidad de listar elecciones aquí ha sido desactivada.
+    // La creación y gestión se maneja en la pestaña 'Crear Elección'.
+    console.log("fetchElections está desactivado en el AdminDashboard.");
   }, []);
 
   const fetchVoterStats = useCallback(async () => {
     try {
       const token = localStorage.getItem("adminToken");
+      if (!token) {
+        throw new Error("No se encontró el token de administrador.");
+      }
       const res = await axios.get("/api/admin/statistics/voters", { headers: { 'x-auth-token': token } });
       setVoterStats(res.data.data || { totalRegistered: 0, totalVoted: 0 });
     } catch (error) {
-      setError("Error al cargar las estadísticas de votantes");
+      const errorMessage = error.response?.data?.message || error.message || "Ocurrió un error desconocido";
+      // No sobreescribir el error principal de las elecciones si ya existe
+      setError(prevError => prevError ? `${prevError} | ${errorMessage}` : `Error de estadísticas: ${errorMessage}`);
+      toast.warn(`No se pudieron cargar las estadísticas: ${errorMessage}`);
     }
   }, []);
 
@@ -113,89 +108,10 @@ const AdminDashboard = () => {
       return;
     }
     setLoading(true);
-    Promise.all([fetchElections(), fetchVoterStats(), fetchUsers()])
+    Promise.all([fetchVoterStats(), fetchUsers()])
       .catch(e => console.error("Failed to load initial data:", e))
       .finally(() => setLoading(false));
   }, [isAdminAuthenticated, navigate, fetchElections, fetchVoterStats, fetchUsers]);
-
-  const handleCreateElection = async () => {
-    if (!newElectionTitle || !newElectionDescription || !newElectionStartDate || !newElectionEndDate || !newElectionStartTime || !newElectionEndTime || !newElectionLevel) {
-      toast.error("Por favor completa todos los campos.");
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const token = localStorage.getItem("adminToken");
-      const payload = {
-        title: newElectionTitle.trim(),
-        name: newElectionTitle.trim(), // Ensure 'name' is also sent if the backend uses it
-        description: newElectionDescription.trim(),
-        startDate: new Date(`${newElectionStartDate}T${newElectionStartTime}`).toISOString(),
-        endDate: new Date(`${newElectionEndDate}T${newElectionEndTime}`).toISOString(),
-        electoralLevel: newElectionLevel,
-        province: ['Congresual', 'Municipal'].includes(newElectionLevel) ? newElectionProvince : undefined
-      };
-      await axios.post("/api/admin/elections", payload, { headers: { "x-auth-token": token } });
-      toast.success("Elección creada correctamente");
-      setShowCreateElectionModal(false);
-      // Reset form
-      setNewElectionTitle("");
-      setNewElectionDescription("");
-      setNewElectionStartDate("");
-      setNewElectionEndDate("");
-      setNewElectionStartTime("");
-      setNewElectionEndTime("");
-      setNewElectionLevel("");
-      setNewElectionProvince("");
-      fetchElections(); // Refresh list
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Error al crear la elección");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Abre el modal para editar y formatea de forma segura las fechas/horas
-  const openEditModal = (election) => {
-    setEditElectionId(election._id || election.id);
-    setEditElectionTitle(election.title ?? election.name ?? "");
-    setEditElectionDescription(election.description ?? "");
-
-    // Los valores de fecha pueden venir como:
-    // 1. timestamp en segundos (10 dígitos)
-    // 2. timestamp en milisegundos (13 dígitos)
-    // 3. string ISO.  
-    // Necesitamos manejarlos todos para evitar "Invalid time value".
-    const parseDate = (raw) => {
-      if (!raw) return null;
-      // Numérico o string numérica
-      if (typeof raw === "number" || /^\d+$/.test(raw)) {
-        const num = Number(raw);
-        // Si tiene 13 dígitos ya está en ms, si tiene 10 está en s
-        return new Date(num > 1e12 ? num : num * 1000);
-      }
-      // Si es string ISO o formato fecha reconocible
-      return new Date(raw);
-    };
-
-    const startObj = parseDate(election.startDate ?? election.startTime);
-    const endObj   = parseDate(election.endDate ?? election.endTime);
-
-    // Si alguna fecha es inválida, mostramos error y abortamos apertura del modal
-    if (!startObj || isNaN(startObj.getTime()) || !endObj || isNaN(endObj.getTime())) {
-      toast.error("Fecha de elección inválida");
-      return;
-    }
-
-    setEditElectionStartDate(startObj.toISOString().split("T")[0]);
-    setEditElectionStartTime(startObj.toTimeString().substring(0, 5));
-    setEditElectionEndDate(endObj.toISOString().split("T")[0]);
-    setEditElectionEndTime(endObj.toTimeString().substring(0, 5));
-
-    setEditElectionLevel(election.electoralLevel ?? "");
-    setEditElectionProvince(election.province ?? "");
-    setShowEditElectionModal(true);
-  };
 
   const handleUpdateElection = async () => {
     if (!editElectionTitle || !editElectionDescription || !editElectionStartDate || !editElectionEndDate || !editElectionStartTime || !editElectionEndTime || !editElectionLevel || (['Congresual', 'Municipal'].includes(editElectionLevel) && !editElectionProvince)) {
@@ -240,17 +156,39 @@ const AdminDashboard = () => {
   };
 
   const handleFinalizeResults = async (electionId) => {
-    if (!window.confirm("¿Estás seguro de que quieres finalizar esta elección? Esta acción es irreversible.")) return;
     setActionLoading(true);
     try {
-      const token = localStorage.getItem("adminToken");
-      await axios.post(`/api/admin/elections/${electionId}/finalize`, {}, { headers: { "x-auth-token": token } });
-      toast.success("Elección finalizada y resultados publicados");
-      fetchElections();
+        // 1. Conectar a la blockchain con un signer para autorizar la transacción
+        const web3Setup = await setupWeb3Provider();
+        if (!web3Setup) {
+            throw new Error("No se pudo conectar con la billetera para finalizar la elección.");
+        }
+        const { provider, signer } = web3Setup;
+        const contract = await getContractInstance(provider, signer);
+        if (!contract) {
+            throw new Error("No se pudo obtener la instancia del contrato.");
+        }
+
+        // 2. Llamar a la función endElection del contrato
+        const tx = await contract.endElection(electionId);
+        toast.info("Procesando finalización en la blockchain... por favor espera.");
+        
+        // 3. Esperar a que la transacción sea minada y confirmada
+        await tx.wait();
+
+        toast.success("Elección finalizada con éxito en la blockchain.");
+        fetchElections(); // Refrescar la lista para mostrar el nuevo estado
+
     } catch (error) {
-      toast.error(error.response?.data?.message || "Error al finalizar la elección");
+        if (error.code === 4001) { // Error de MetaMask si el usuario rechaza la transacción
+             toast.error("Transacción rechazada por el usuario.");
+        } else {
+            const msg = error?.data?.message || error.message || "Error al finalizar la elección en la blockchain.";
+            toast.error(msg);
+            console.error("Error en handleFinalizeResults:", error);
+        }
     } finally {
-      setActionLoading(false);
+        setActionLoading(false);
     }
   };
 
@@ -258,6 +196,46 @@ const AdminDashboard = () => {
     if (hasElectionEnded(election)) return <Badge bg="danger">Terminada</Badge>;
     if (isElectionActive(election)) return <Badge bg="success">Activa</Badge>;
     return <Badge bg="warning">Pendiente</Badge>;
+  };
+
+  const openEditModal = (election) => {
+    setEditElectionId(election._id || election.id);
+    setEditElectionTitle(election.title ?? election.name ?? "");
+
+    // Los valores de fecha pueden venir como:
+    // 1. timestamp en segundos (10 dígitos)
+    // 2. timestamp en milisegundos (13 dígitos)
+    // 3. string ISO.  
+    // Necesitamos manejarlos todos para evitar "Invalid time value".
+    const parseDate = (raw) => {
+      if (!raw) return null;
+      // Numérico o string numérica
+      if (typeof raw === "number" || /^\d+$/.test(raw)) {
+        const num = Number(raw);
+        // Si tiene 13 dígitos ya está en ms, si tiene 10 está en s
+        return new Date(num > 1e12 ? num : num * 1000);
+      }
+      // Si es string ISO o formato fecha reconocible
+      return new Date(raw);
+    };
+
+    const startObj = parseDate(election.startDate ?? election.startTime);
+    const endObj   = parseDate(election.endDate ?? election.endTime);
+
+    // Si alguna fecha es inválida, mostramos error y abortamos apertura del modal
+    if (!startObj || isNaN(startObj.getTime()) || !endObj || isNaN(endObj.getTime())) {
+      toast.error("Fecha de elección inválida");
+      return;
+    }
+
+    setEditElectionStartDate(startObj.toISOString().split("T")[0]);
+    setEditElectionStartTime(startObj.toTimeString().substring(0, 5));
+    setEditElectionEndDate(endObj.toISOString().split("T")[0]);
+    setEditElectionEndTime(endObj.toTimeString().substring(0, 5));
+
+    setEditElectionLevel(election.electoralLevel ?? "");
+    setEditElectionProvince(election.province ?? "");
+    setShowEditElectionModal(true);
   };
 
   if (loading) {
@@ -279,93 +257,78 @@ const AdminDashboard = () => {
 
       <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k)} className="mb-3">
         <Tab eventKey="overview" title="Resumen">
-          <Row>
-            <Col md={4}><Card><Card.Body><Card.Title>Votantes Registrados</Card.Title><Card.Text className="fs-2">{voterStats.totalRegistered}</Card.Text></Card.Body></Card></Col>
-            <Col md={4}><Card><Card.Body><Card.Title>Votos Emitidos</Card.Title><Card.Text className="fs-2">{voterStats.totalVoted}</Card.Text></Card.Body></Card></Col>
-            <Col md={4}><Card><Card.Body><Card.Title>Elecciones Activas</Card.Title><Card.Text className="fs-2">{elections.filter(isElectionActive).length}</Card.Text></Card.Body></Card></Col>
-          </Row>
+          <Card className="mt-3">
+            <Card.Body>
+              <Card.Title>Resumen General</Card.Title>
+              <Row>
+
+                <Col md={4}>
+                  <Card bg="light" text="dark" className="mb-2">
+                    <Card.Body>
+                      <Card.Title>{voterStats.totalRegistered}</Card.Title>
+                      <Card.Text>Votantes Registrados</Card.Text>
+                    </Card.Body>
+                  </Card>
+                </Col>
+                <Col md={4}>
+                  <Card bg="light" text="dark" className="mb-2">
+                    <Card.Body>
+                      <Card.Title>{voterStats.totalVoted}</Card.Title>
+                      <Card.Text>Votos Emitidos</Card.Text>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+              <hr />
+              <h5>Acciones Rápidas</h5>
+              {canCreateElection && (
+                <Button
+                  variant="primary"
+                  onClick={() => setShowCreateElectionModal(true)}
+                  className="me-2"
+                >
+                  <i className="fas fa-plus-circle me-2"></i>Crear Nueva Elección
+                </Button>
+              )}
+               <Button variant="info" onClick={() => navigate("/admin/configuration")} className="me-2">
+                <i className="fas fa-cog me-2"></i>Ir a Configuración
+              </Button>
+            </Card.Body>
+          </Card>
         </Tab>
-        <Tab eventKey="elections" title="Elecciones">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h2>Gestionar Elecciones</h2>
-            <Button onClick={() => setShowCreateElectionModal(true)} disabled={!canCreateElection}>Crear Elección</Button>
-          </div>
-          <Table striped bordered hover responsive>
-            <thead>
-              <tr><th>ID</th><th>Título</th><th>Fechas</th><th>Estado</th><th>Acciones</th></tr>
-            </thead>
-            <tbody>
-              {elections.map((election) => {
-                const eid = election._id || election.id;
-                return (
-                  <tr key={eid}>
-                    <td>{formatAddress(eid)}</td>
-                    <td>{election.title || election.name}</td>
-                    <td>{formatTimestamp(election.startDate || election.startTime)} - {formatTimestamp(election.endDate || election.endTime)}</td>
-                    <td>{getStatusBadge(election)}</td>
-                    <td>
-                      <Button size="sm" variant="secondary" onClick={() => openEditModal(election)} disabled={!canManageElections}>Editar</Button>{" "}
-                      <Button size="sm" variant="danger" onClick={() => handleDeleteElection(eid)} disabled={!canManageElections}>Eliminar</Button>{" "}
-                      <Button size="sm" variant="success" onClick={() => handleFinalizeResults(eid)} disabled={!canFinalizeResults || !hasElectionEnded(election)}>Finalizar</Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        </Tab>
+
         <Tab eventKey="candidates" title="Gestionar Candidatos">
           <ManageCandidates
             isElectionActive={isElectionActive}
             hasElectionEnded={hasElectionEnded}
-            allElections={elections}
+
           />
         </Tab>
         <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
+        <Tab eventKey="createElection" title="Crear Elección">
+          <CreateElection onElectionCreated={() => {
+            toast.success("¡Elección creada con éxito!");
+            // Opcional: cambiar a otra pestaña o refrescar datos si es necesario
+            setActiveTab('overview');
+          }} />
+        </Tab>
         <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
       </Tabs>
 
       {/* Create Election Modal */}
-      <Modal show={showCreateElectionModal} onHide={() => setShowCreateElectionModal(false)}>
-        <Modal.Header closeButton><Modal.Title>Crear Nueva Elección</Modal.Title></Modal.Header>
+      <Modal show={showCreateElectionModal} onHide={() => setShowCreateElectionModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Crear Nueva Elección</Modal.Title>
+        </Modal.Header>
         <Modal.Body>
-          <Form>
-            <Form.Group className="mb-3" controlId="newElectionTitle"><Form.Label>Título</Form.Label><Form.Control type="text" value={newElectionTitle} onChange={(e) => setNewElectionTitle(e.target.value)} /></Form.Group>
-            <Form.Group className="mb-3" controlId="newElectionDescription"><Form.Label>Descripción</Form.Label><Form.Control as="textarea" rows={3} value={newElectionDescription} onChange={(e) => setNewElectionDescription(e.target.value)} /></Form.Group>
-            <Row>
-              <Col><Form.Group className="mb-3" controlId="newElectionStartDate"><Form.Label>Fecha Inicio</Form.Label><Form.Control type="date" value={newElectionStartDate} onChange={(e) => setNewElectionStartDate(e.target.value)} /></Form.Group></Col>
-              <Col><Form.Group className="mb-3" controlId="newElectionStartTime"><Form.Label>Hora Inicio</Form.Label><Form.Control type="time" value={newElectionStartTime} onChange={(e) => setNewElectionStartTime(e.target.value)} /></Form.Group></Col>
-            </Row>
-            <Row>
-              <Col><Form.Group className="mb-3" controlId="newElectionEndDate"><Form.Label>Fecha Fin</Form.Label><Form.Control type="date" value={newElectionEndDate} onChange={(e) => setNewElectionEndDate(e.target.value)} /></Form.Group></Col>
-              <Col><Form.Group className="mb-3" controlId="newElectionEndTime"><Form.Label>Hora Fin</Form.Label><Form.Control type="time" value={newElectionEndTime} onChange={(e) => setNewElectionEndTime(e.target.value)} /></Form.Group></Col>
-            </Row>
-            <Form.Group className="mb-3" controlId="newElectionLevel">
-              <Form.Label>Nivel Electoral</Form.Label>
-              <Form.Select value={newElectionLevel} onChange={(e) => setNewElectionLevel(e.target.value)} required>
-                <option value="">Seleccione un nivel</option>
-                <option value="Presidencial">Presidencial</option>
-                <option value="Congresual">Congresual</option>
-                <option value="Municipal">Municipal</option>
-              </Form.Select>
-            </Form.Group>
-            {['Congresual', 'Municipal'].includes(newElectionLevel) && (
-              <Form.Group className="mb-3">
-                <Form.Label>Provincia</Form.Label>
-                <Form.Select value={newElectionProvince} onChange={(e) => setNewElectionProvince(e.target.value)} required>
-                  <option value="">Seleccione una provincia</option>
-                  {PROVINCES.map(province => (
-                    <option key={province} value={province}>{province}</option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-            )}
-          </Form>
+          <CreateElection
+            onElectionCreated={() => {
+              toast.success("¡Elección creada con éxito! Actualizando lista...");
+              setShowCreateElectionModal(false);
+              fetchElections();
+            }}
+          />
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCreateElectionModal(false)}>Cancelar</Button>
-          <Button variant="primary" onClick={handleCreateElection} disabled={actionLoading}>{actionLoading ? <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> : 'Crear'}</Button>
-        </Modal.Footer>
       </Modal>
 
       {/* Edit Election Modal */}

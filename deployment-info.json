@@ -1,8 +1,7 @@
 {
-  "tokenAddress": "0x0177428D9Ed3a103Cb52708457D65E35D72aA3b3",
-  "votingSystemAddress": "0x4F2EE2883d93fF5d2Dc007FB825910A1EB59E220",
-  "adminAddress": "0x90D13Dd25D0988C87626E421242A45d20cb28cd1",
-  "deployerAddress": "0x90D13Dd25D0988C87626E421242A45d20cb28cd1",
-  "deploymentTime": "2025-06-15T02:15:15.847Z",
-  "network": "sepolia"
+  "votingSystemAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "verifierAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+  "deploymentTime": "2025-06-20T13:59:30.789Z",
+  "network": "localhost",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 }

@@ -80,7 +80,12 @@ const eligibilityRequirementsSchema = new Schema({
  * Esquema principal para elecciones
  */
 const electionSchema = new mongoose.Schema({
-  // Información básica
+  contractElectionId: {
+    type: String,
+    unique: true,
+    sparse: true, // Permite valores nulos sin violar la unicidad
+    index: true
+  },
   title: {
     type: String,
     required: true,
@@ -138,6 +143,16 @@ const electionSchema = new mongoose.Schema({
     ref: 'ElectionSettings'
   },
   categories: [electionCategorySchema],
+
+  // Candidatos
+  candidates: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    // Podríamos añadir más detalles del candidato aquí en el futuro
+  }],
   
   // Votantes autorizados
   allowedVoters: [{

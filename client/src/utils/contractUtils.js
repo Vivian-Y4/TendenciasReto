@@ -1,51 +1,32 @@
 import { ethers } from 'ethers';
+// Importa el ABI correcto desde el archivo JSON generado por Hardhat/Truffle
+import VotingSystemTokenArtifact from '../abis/VotingSystem_WithToken.json';
 
-// ABI simplificado del contrato VotingSystem
-// Normalmente esto vendría de los artefactos compilados, pero los incluimos directamente
-// para evitar problemas de importación fuera del directorio src
-const VotingSystemArtifact = {
-  abi: [
-    // Eventos
-    "event ElectionCreated(uint256 electionId, string title, uint256 startTime, uint256 endTime)",
-    "event VoteCast(uint256 electionId, address voter, uint256 candidateId)",
-    "event ElectionEnded(uint256 electionId, uint256 winningCandidateId)",
-    
-    // Funciones
-    "function createElection(string memory _title, string memory _description, uint256 _startTime, uint256 _endTime) public returns (uint256)",
-    "function addCandidate(uint256 _electionId, string memory _name, string memory _description) public",
-    "function registerVoter(uint256 _electionId, address _voter) public",
-    "function castVote(uint256 _electionId, uint256 _candidateId) public",
-    "function endElection(uint256 _electionId) public",
-    "function getElectionDetails(uint256 _electionId) public view returns (string memory, string memory, uint256, uint256, bool, uint256)",
-    "function getCandidateCount(uint256 _electionId) public view returns (uint256)",
-    "function getCandidate(uint256 _electionId, uint256 _candidateId) public view returns (string memory, string memory, uint256)",
-    "function getVoterStatus(uint256 _electionId, address _voter) public view returns (bool, bool, uint256)"
-  ]
-};
+// Dirección del contrato VotingSystem_WithToken desplegado
+// Esta dirección debe coincidir con la del contrato que estás usando en tu red de desarrollo (Hardhat, Ganache, etc.)
+const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Reemplazar si es necesario
 
-export const getContractInstance = async (provider, signerOrProvider = null) => {
+/**
+ * Obtiene una instancia del contrato VotingSystem_WithToken conectada a un signer
+ * @param {ethers.Signer} signer - El signer para interactuar con el contrato
+ * @returns {ethers.Contract | null}
+ */
+export const getContractInstance = async (signer) => {
+  if (!signer) {
+    console.error("Se requiere un signer para obtener la instancia del contrato");
+    return null;
+  }
   try {
-    // Contract address would normally be loaded from environment variables or a config file
-    const contractAddress = process.env.REACT_APP_CONTRACT_ADDRESS;
-    
-    if (!contractAddress) {
-      console.error('Contract address not found');
-      return null;
-    }
-    
-    // Use either the provided signer/provider or the default provider
-    const contract = new ethers.Contract(
-      contractAddress,
-      VotingSystemArtifact.abi,
-      signerOrProvider || provider
-    );
-    
+    // Usa el ABI importado del artefacto JSON correcto
+    const contract = new ethers.Contract(contractAddress, VotingSystemTokenArtifact.abi, signer);
     return contract;
   } catch (error) {
-    console.error('Error creating contract instance:', error);
+    console.error("Error al obtener la instancia del contrato:", error);
     return null;
   }
 };
+
+// Helper functions
 
 export const formatTimestamp = (timestamp) => {
   if (timestamp === null || timestamp === undefined || timestamp === '') return 'N/A';
