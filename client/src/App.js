@@ -34,9 +34,9 @@ import AuthContext from './context/AuthContext';
 import { AdminProvider } from './context/AdminContext';
 
 // Import contracts ABI
-// import VotingSystemWithTokenABI from './abis/VotingSystem_WithToken.json'; // No longer primary
-import VotingSystemABI from './abis/VotingSystem.json'; // ZK version, primary for ZK features
-import VotingToken from './abis/VotingToken.json'; // Keep if token functionality is still used elsewhere, or remove if not
+import VotingSystemWithTokenABI from './abis/VotingSystem_WithToken.json'; // Use this for the main contract
+// import VotingSystemABI from './abis/VotingSystem.json'; // ZK version, not the primary for general app use
+import VotingToken from './abis/VotingToken.json'; // Keep if token functionality is still used elsewhere
 
 // Import styles
 import './App.css';
@@ -53,15 +53,10 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null);
+  const [contract, setContract] = useState(null); // This will be the main VotingSystem contract
+  const [voterIdentifier, setVoterIdentifier] = useState(null); // Added for voterIdentifier
   const [tokenContract, setTokenContract] = useState(null);
   const [userProvince, setUserProvince] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [voterIdentifier, setVoterIdentifier] = useState(null);
-  const [zkVoterIdentifier, setZkVoterIdentifier] = useState(null);
-  const [userProvince, setUserProvince] = useState(null);
-  const [zkVoterIdentifier, setZkVoterIdentifier] = useState(null); // Use a distinct name for ZK ID
-  const [tokenContract, setTokenContract] = useState(null); // Keep if other token interactions exist
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -70,172 +65,194 @@ function App() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_address');
     localStorage.removeItem('user_name');
-    localStorage.removeItem('user_province');
-    localStorage.removeItem('zk_voter_identifier');
     setIsAuthenticated(false);
     setUserAddress(null);
     setUserName(null);
-    setUserProvince(null);
-    setZkVoterIdentifier(null);
     setIsAdmin(false);
     setContract(null);
     setTokenContract(null);
     setProvider(null);
     setSigner(null);
+    setVoterIdentifier(null); // Clear voterIdentifier on logout
     toast.info('Sesión cerrada');
     navigate('/');
   }, [navigate]);
 
-  // Efecto de autenticación y contratos al cargar la aplicación
-  useEffect(() => {
-    const initializeApp = async () => {
-      setLoading(true);
-      const token = localStorage.getItem('auth_token');
-      const storedAddress = localStorage.getItem('user_address');
-      const storedName = localStorage.getItem('user_name');
-      const storedProvince = localStorage.getItem('user_province');
-      const storedZkId = localStorage.getItem('zk_voter_identifier');
-
-      if (token && storedAddress) {
-        setIsAuthenticated(true);
-        setUserAddress(storedAddress);
-        if (storedName) setUserName(storedName);
-        if (storedProvince) setUserProvince(storedProvince);
-        if (storedZkId) setZkVoterIdentifier(storedZkId);
-
-        try {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const signer = provider.getSigner();
-          setProvider(provider);
-          setSigner(signer);
-
-          // Initialize ZK Contract
-          const zkVotingSystemAddress = process.env.REACT_APP_ZK_VOTING_SYSTEM_ADDRESS;
-          if (zkVotingSystemAddress && VotingSystemABI && VotingSystemABI.abi) {
-            const zkContractInstance = new ethers.Contract(zkVotingSystemAddress, VotingSystemABI.abi, signer);
-            setContract(zkContractInstance); // Set ZK contract
-          } else {
-            console.error("ZK Voting System address or ABI not configured!");
-            toast.error("Error: ZK Voting System not configured for initial load.");
-          }
-
-          // Re-check admin status from token or a dedicated backend call if necessary
-          // For now, assuming token might contain this or it's set during login.
-          // If isAdmin status is in the token, decode it here.
-          // For simplicity, we'll rely on it being set during handleLoginSuccess.
-          // If not available, user might need to re-login for admin actions.
-          const storedIsAdmin = localStorage.getItem('is_admin'); // Example, if stored
-          if (storedIsAdmin === 'true') {
-            setIsAdmin(true);
-          }
-
-
-        } catch (error) {
-          console.error("Error initializing provider/signer or ZK contract on load:", error);
-          toast.error("Error al reconectar. Por favor, inicie sesión de nuevo.");
-          // Potentially logout if essential parts fail
-          // logout();
-        }
-      }
-      setLoading(false);
+  // Mock function to get voterIdentifier (replace with backend call)
+  const getMockVoterIdentifierForUser = async (address) => {
+    if (!address) return null;
+    console.log(`[AuthMock] Attempting to fetch voterIdentifier for address: ${address}`);
+    // This would be a call to a backend endpoint like:
+    // const response = await fetch('/api/users/me/voter-identifier');
+    // const data = await response.json(); return data.voterIdentifier;
+    const mockMapping = {
+      "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", // For Hardhat account 0
+      "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234", // For Hardhat account 1
+      // Add more mappings as needed for testing
     };
-    initializeApp();
-  }, [logout]); // Added logout to dependency array if it's used inside
+    const identifier = mockMapping[address.toLowerCase()];
+    if (identifier) {
+      console.log(`[AuthMock] Found mock voterIdentifier: ${identifier} for address: ${address}`);
+      return identifier;
+    }
+    console.warn(`[AuthMock] No mock voterIdentifier found for address: ${address}. Voting may not be possible.`);
+    return null;
+  };
 
-  const handleLoginSuccess = useCallback(async (address, web3Provider, web3Signer, cedula, provinceFromIdLogin) => {
-    setLoading(true);
-    setProvider(web3Provider);
-    setSigner(web3Signer);
+  // Login manual (si usas login por JWT además de wallet)
+  const login = useCallback((address, token, name) => {
+    localStorage.setItem('auth_token', token);
+    localStorage.setItem('user_address', address);
+    localStorage.setItem('user_name', name || 'Usuario');
+    setIsAuthenticated(true);
     setUserAddress(address);
+    setUserName(name || 'Usuario');
+    // Verifica admin
+    const adminAddress = process.env.REACT_APP_ADMIN_ADDRESS;
+    if (adminAddress && address.toLowerCase() === adminAddress.toLowerCase()) {
+      setIsAdmin(true);
+    }
+  }, []);
+
+  // Efecto de autenticación y contratos
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const storedAddress = localStorage.getItem('user_address');
+    const storedName = localStorage.getItem('user_name');
+
+    if (token && storedAddress) {
+      setIsAuthenticated(true);
+      setUserAddress(storedAddress);
+      setUserName(storedName || 'Usuario');
+      const adminAddress = process.env.REACT_APP_ADMIN_ADDRESS;
+      if (adminAddress && storedAddress.toLowerCase() === adminAddress.toLowerCase()) {
+        setIsAdmin(true);
+      }
+    }
+  }, []);
+  const handleLoginSuccess = useCallback(async (address, provider, signer, cedula, province) => {
+    if (!provider || !signer) {
+      toast.error("Error: El proveedor de Web3 o el firmante no están disponibles.");
+      return;
+    }
+    setLoading(true);
 
     try {
-      // 1. Fetch nonce
-      const nonceResponse = await fetch('/api/auth/nonce?address=' + address); // Pass address as query param
-      if (!nonceResponse.ok) {
-        const errText = await nonceResponse.text();
-        throw new Error(`Error fetching nonce: ${errText}`);
-      }
-      const nonceData = await nonceResponse.json();
-      if (!nonceData.success || !nonceData.message) {
-        throw new Error(nonceData.message || 'Failed to retrieve nonce.');
-      }
+      // Verificar la red de MetaMask
+      const network = await provider.getNetwork();
+      // El ID de la red para la red de pruebas Sepolia es 11155111.
+      const expectedNetworkId = 11155111;
 
-      // 2. Sign nonce
-      const signature = await web3Signer.signMessage(nonceData.message);
-
-      // 3. Call verify signature
-      const verifyResponse = await fetch('/api/auth/verify-signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          signature,
-          message: nonceData.message,
-          name: 'Usuario', // Or derive a name if available (e.g., from IdLogin)
-          cedula,
-          clientSelectedProvince: provinceFromIdLogin
-        }),
-      });
-
-      if (!verifyResponse.ok) {
-        const errText = await verifyResponse.text();
-        throw new Error(`Error verifying signature: ${errText}`);
-      }
-      const authData = await verifyResponse.json();
-      if (!authData.success || !authData.user) {
-        throw new Error(authData.message || 'Authentication failed.');
+      if (network.chainId !== expectedNetworkId) {
+        toast.error(`Por favor, conecta tu MetaMask a la red correcta. Se esperaba la red ${expectedNetworkId} pero estás en la ${network.chainId}.`);
+        setLoading(false);
+        return;
       }
 
-      // 4. Store auth data and set state
-      localStorage.setItem('auth_token', authData.token);
-      localStorage.setItem('user_address', authData.user.address);
-      localStorage.setItem('user_name', authData.user.name);
-      localStorage.setItem('user_province', authData.user.province);
-      localStorage.setItem('zk_voter_identifier', authData.user.voterIdentifier);
-      localStorage.setItem('is_admin', authData.user.isAdmin ? 'true' : 'false');
-
-
-      setIsAuthenticated(true);
-      setUserName(authData.user.name);
-      setUserProvince(authData.user.province);
-      setZkVoterIdentifier(authData.user.voterIdentifier);
-      setIsAdmin(authData.user.isAdmin);
+      setProvider(provider);
+      setSigner(signer);
+      setUserAddress(address);
+      setUserName(address.substring(0, 6) + '...' + address.substring(address.length - 4));
       setUserProvince(province);
 
-      // 5. Initialize ZK Contract
-      const zkVotingSystemAddress = process.env.REACT_APP_ZK_VOTING_SYSTEM_ADDRESS;
-      if (zkVotingSystemAddress && VotingSystemABI && VotingSystemABI.abi) {
-        const zkContract = new ethers.Contract(zkVotingSystemAddress, VotingSystemABI.abi, web3Signer);
-        setContract(zkContract); // This now sets the ZK contract
-        console.log("ZK Voting System Contract initialized:", zkContract.address);
+      // Instanciar contratos
+      const votingContract = new ethers.Contract(
+        process.env.REACT_APP_VOTING_ADDRESS,
+        VotingSystemWithTokenABI.abi,
+        signer
+      );
+      setContract(votingContract);
+
+      if (address) {
+        setVoterIdentifier(address);
+        console.log("Voter Identifier set in context (using user address):", address);
       } else {
-        console.error("ZK Voting System address or ABI not configured!");
-        toast.error("Error: ZK Voting System not configured.");
+        toast.warn("No se pudo obtener la dirección del usuario para el identificador de votante.");
+        setVoterIdentifier(null);
       }
 
-      // Optional: Initialize token contract if still needed
       if (process.env.REACT_APP_TOKEN_ADDRESS && VotingToken && VotingToken.abi) {
         const tokenContractInstance = new ethers.Contract(
           process.env.REACT_APP_TOKEN_ADDRESS,
           VotingToken.abi,
-          web3Signer
+          signer
         );
         setTokenContract(tokenContractInstance);
+      } else {
+        console.warn("Token contract address or ABI not fully configured if it's optional.");
       }
 
-
+      const contractAdmin = await votingContract.admin();
+      setIsAdmin(address.toLowerCase() === contractAdmin.toLowerCase());
+      setIsAuthenticated(true);
       toast.success('Sesión iniciada y wallet conectada');
       navigate('/');
 
     } catch (error) {
-      toast.error(`Error en el proceso de login: ${error.message}`);
+      toast.error(`Error cargando contratos o datos iniciales: ${error.message}`);
       console.error("Error in handleLoginSuccess:", error);
-      // Potentially logout or clear partial state
-      logout(); // Or a more granular cleanup
     } finally {
       setLoading(false);
     }
-  }, [navigate, logout]); // Added logout to dependency array
+  }, [navigate]);
+
+  const connectWalletForAdmin = useCallback(async (expectedAdminAddress) => {
+    if (!expectedAdminAddress) {
+      toast.error("No se ha proporcionado una dirección de administrador para la verificación.");
+      return null;
+    }
+    setLoading(true);
+    try {
+      if (!window.ethereum) {
+        toast.error("MetaMask no está instalado.");
+        setLoading(false);
+        return null;
+      }
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const accounts = await provider.send('eth_requestAccounts', []);
+      const connectedAddress = accounts[0];
+
+      // Verificación: la cuenta conectada debe ser la del administrador
+      if (expectedAdminAddress && connectedAddress.toLowerCase() !== expectedAdminAddress.toLowerCase()) {
+        toast.error(`La billetera conectada (${connectedAddress.substring(0, 6)}...) no es la billetera del administrador. Por favor, seleccione la cuenta correcta en MetaMask.`);
+        setLoading(false);
+        return null;
+      }
+
+      const signer = provider.getSigner();
+      
+      const network = await provider.getNetwork();
+      const SEPOLIA_CHAIN_ID = 11155111;
+
+      if (network.chainId !== SEPOLIA_CHAIN_ID) {
+        toast.error("Por favor, conéctate a la red de Sepolia en MetaMask.");
+        setLoading(false);
+        return null;
+      }
+      
+      const votingSystemContract = new ethers.Contract(
+        process.env.REACT_APP_VOTING_ADDRESS,
+        VotingSystemWithTokenABI.abi,
+        signer
+      );
+      
+      setContract(votingSystemContract);
+      setSigner(signer);
+      setProvider(provider);
+      setIsAuthenticated(true); 
+      setUserAddress(connectedAddress);
+      
+      toast.success("Billetera de administrador conectada exitosamente.");
+      return votingSystemContract; // Devolver la instancia del contrato
+    } catch (error) {
+      console.error("Error conectando la billetera para el admin:", error);
+      toast.error("Error al conectar la billetera.");
+      return null; // Devolver null en caso de error
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
 
   // Rutas protegidas
   const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -248,8 +265,8 @@ function App() {
     return children;
   };
 
-  if (loading && !isAuthenticated) { // Show loading only if not yet authenticated (initial load)
-    return <div className="app-loading">Cargando aplicación...</div>;
+  if (loading) {
+    return <div className="app-loading">Cargando conexión blockchain...</div>;
   }
 
   return (
@@ -259,14 +276,14 @@ function App() {
       userName,
       isAdmin,
       userProvince,
-      // login, // login function removed, handleLoginSuccess is the primary flow
+      login,
       logout,
+      connectWalletForAdmin,
       provider,
       signer,
-      contract, // This will now be the ZK contract instance
-      tokenContract, // Optional token contract
-      province: userProvince,
-      voterIdentifier: zkVoterIdentifier // Provide the ZK ID
+      contract, // Main VotingSystem contract
+      tokenContract,
+      voterIdentifier // Expose voterIdentifier in context
     }}>
       <AdminProvider>
         <div className="app">

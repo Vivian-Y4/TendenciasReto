@@ -5,8 +5,6 @@ const AuthContext = createContext({
   isAuthenticated: false,
   userAddress: null,
   userName: null,
-  province: null,
-  voterIdentifier: null,
   isAdmin: false,
   userProvince: null, // provincia del votante
   login: () => {},
