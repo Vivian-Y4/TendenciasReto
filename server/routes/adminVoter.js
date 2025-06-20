@@ -20,6 +20,20 @@ router.post('/', adminAuth, adminVoterController.createVoter);
 router.get('/', adminAuth, adminVoterController.getVoters);
 
 /**
+ * @route   GET /api/admin/voters/by-province/:province
+ * @desc    Fetches voters by province
+ * @access  Privado (Admin)
+ */
+router.get('/by-province/:province', adminAuth, adminVoterController.getVotersByProvince);
+
+/**
+ * @route   GET /api/admin/voters/all-wallets
+ * @desc    Fetches all voters with wallet addresses
+ * @access  Privado (Admin)
+ */
+router.get('/all-wallets', adminAuth, adminVoterController.getAllVotersWithWallets);
+
+/**
  * @route   GET /api/admin/voters/:id
  * @desc    Obtener un votante por ID
  * @access  Privado (Admin)
@@ -67,13 +81,5 @@ router.get('/stats', adminAuth, adminVoterAdditional.getVoterStats);
  * @access  Privado (Admin)
  */
 router.post('/elections/:electionId/assign-voters', adminAuth, adminVoterAdditional.assignVotersToElection);
-
-// GET /api/admin/voters/by-province/:province
-// Fetches voters by province
-router.get('/by-province/:province', adminAuth, adminVoterController.getVotersByProvince);
-
-// GET /api/admin/voters/all-wallets
-// Fetches all voters with wallet addresses
-router.get('/all-wallets', adminAuth, adminVoterController.getAllVotersWithWallets);
 
 module.exports = router;

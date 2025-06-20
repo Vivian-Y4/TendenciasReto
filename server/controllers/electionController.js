@@ -3,6 +3,7 @@ const fs = require('fs'); // Using synchronous fs
 const path = require('path');
 const { AppError } = require('../middlewares/errorHandler');
 const Election = require('../models/Election'); // Import Election model
+const blockchainService = require('../utils/blockchainService'); // Import blockchainService
 
 let localContractABI = null; // Cache ABI - May still be needed for other functions like getElection, getElectionResults
 
@@ -203,7 +204,6 @@ const getElectionResults = async (req, res, next) => {
 
         res.json({
             success: true,
-            message: `Resultados de la elección ${numericElectionId.toString()} obtenidos desde la blockchain.`,
             data: {
                 electionId: numericElectionId.toString(),
                 resultsFinalized: summary.resultsFinalized,
@@ -222,20 +222,6 @@ const getElectionResults = async (req, res, next) => {
         }
         next(new AppError(`Error al obtener resultados para elección ${electionIdParam} desde blockchain: ${error.message}`, 500));
     }
-};
-
-module.exports = {
-  getElections,
-  getElection,
-  getElectionResults,
-  // Functions below are commented out as they are either admin-specific (handled by electionAdminController)
-  // or part of a more complex MongoDB-dependent system not in the current scope of direct contract integration.
-  // createElection,
-  // updateElection,
-  // finalizeElection,
-  // getElectionStatistics,
-  // castVote,
-  // getResults
 };
 
 /**
@@ -287,7 +273,6 @@ const revealVoteOnContract = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Voto revelado exitosamente y será contado.",
       data: {
         transactionHash: receipt.transactionHash,
         blockNumber: receipt.blockNumber,

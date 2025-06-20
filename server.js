@@ -12,6 +12,7 @@ const adminActivityRoutes = require('./server/routes/activityLog');
 const jceVoterRegistryRoutes = require('./server/routes/jceVoterRegistry'); // Added JCE routes
 const candidateAdminRoutes = require('./server/routes/candidateAdmin');
 const { listenForElections } = require('./server/services/blockchainListener');
+const adminVoterRoutes = require('./server/routes/adminVoter');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/elections', electionRoutes);
 app.use('/api/admin/statistics', adminStatsRoutes);
 app.use('/api/admin/activity', adminActivityRoutes);
 app.use('/api/admin/candidates', candidateAdminRoutes);
+app.use('/api/admin/voters', adminVoterRoutes);
 
 // Resto de rutas admin
 app.use('/api/admin', adminRoutes);

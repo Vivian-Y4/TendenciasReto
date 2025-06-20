@@ -12,7 +12,8 @@ class BlockchainService {
   constructor() {
     this.provider = null;
     this.contract = null;
-    this.contractAddress = null;
+    // Intenta leer la dirección del contrato desde variables de entorno al crear la instancia
+    this.contractAddress = process.env.CONTRACT_ADDRESS || null;
     this.initialized = false;
     this.adminWallet = null;
   }
@@ -28,6 +29,15 @@ class BlockchainService {
       process.env.ETHEREUM_RPC_URL || 'http://localhost:8545'
     );
 
+    // Obtener dirección del contrato
+    if (!this.contractAddress) {
+      this.contractAddress = process.env.CONTRACT_ADDRESS;
+    }
+
+    if (!this.contractAddress) {
+      throw new AppError('CONTRACT_ADDRESS no definido en variables de entorno.', 500);
+    }
+
     // Cargar ABI del contrato
     try {
       const contractABIPath = path.join(
@@ -40,13 +50,7 @@ class BlockchainService {
       throw new AppError(`Error cargando ABI del contrato: ${error.message}`, 500);
     }
 
-    // Obtener dirección del contrato
-    this.contractAddress = process.env.CONTRACT_ADDRESS;
-    if (!this.contractAddress) {
-      throw new AppError('Dirección del contrato no configurada en variables de entorno', 500);
-    }
-
-    // Crear instancia del contrato
+    // Crear instancia del contrato con la dirección validada
     this.contract = new ethers.Contract(
       this.contractAddress,
       this.contractABI,
