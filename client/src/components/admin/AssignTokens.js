@@ -13,6 +13,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
   const [groupAmount, setGroupAmount] = useState('');
   const [groupStatus, setGroupStatus] = useState('');
   const [groupLoading, setGroupLoading] = useState(false);
+  const [hasVoters, setHasVoters] = useState(true);
 
   const handleAssign = async () => {
     setStatus('');
@@ -82,25 +83,35 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         headers: { "x-auth-token": adminToken }
       });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          setGroupStatus(`Error al obtener votantes: ${errorData.message || response.statusText}`);
-          setGroupLoading(false);
-          return;
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage;
+        if (response.status === 404 || errorText.includes('No se encontraron votantes')) {
+          errorMessage = `No hay votantes registrados para la provincia ${selectedProvince}.`;
+        } else {
+          errorMessage = `Error al obtener votantes: ${response.statusText}`;
         }
 
-        const data = await response.json();
-        if (!data.success || !data.voters || data.voters.length === 0) {
-          setGroupStatus(`No se encontraron votantes con wallet para la provincia ${selectedProvince}.`);
-          setGroupLoading(false);
-          return;
-        }
+        setGroupStatus(errorMessage);
+        setHasVoters(false);
+        setGroupLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (!data.success || !data.voters || data.voters.length === 0) {
+        setGroupStatus(`No hay votantes registrados para la provincia ${selectedProvince}.`);
+        setHasVoters(false);
+        setGroupLoading(false);
+        return;
+      }
 
       const votersToProcess = data.voters;
       setGroupStatus(`Votantes encontrados: ${votersToProcess.length}. Iniciando asignación...`);
+      setHasVoters(true);
 
       if (!window.ethereum) {
-        setGroupStatus("Error: Metamask no detectado.");
+        setGroupStatus("Error: MetaMask no está instalado o no está activo en esta página.");
         setGroupLoading(false);
         return;
       }
@@ -117,12 +128,6 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       const parsedGroupAmount = ethers.utils.parseUnits(groupAmount, 18);
 
       for (const voter of votersToProcess) {
-        if (!voter.walletAddress) {
-          failedAssignments.push({ voter: voter.firstName, error: "Dirección de wallet no encontrada." });
-          failCount++;
-          continue;
-        }
-
         try {
           const tx = await contract.transfer(voter.walletAddress, parsedGroupAmount);
           await tx.wait();
@@ -136,30 +141,28 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
 
           if (err.reason && err.reason.includes("No autorizado para transferir")) {
             setGroupStatus(`Error de autorización: ${specificError}. Se detuvo la asignación masiva.`);
-            break;
+            setGroupLoading(false);
+            return;
           }
         }
       }
 
-        let summaryMessage = `Asignación para ${selectedProvince} completada. Éxitos: ${successCount}, Fallos: ${failCount}.`;
-        if (failedAssignments.length > 0) {
-          summaryMessage += " Detalles de fallos: " + failedAssignments.map(f => `${f.voter}: ${f.error}`).join("; ");
-          console.error("Fallos en asignación grupal:", failedAssignments);
-        }
-        setGroupStatus(summaryMessage);
-        // Clear fields on success or partial success
-        // setSelectedProvince('');
-        // setGroupAmount('');
-
-      } catch (error) {
-        console.error('Error en handleGroupAssign:', error);
-        setGroupStatus('Error durante la asignación grupal: ' + error.message);
-      } finally {
-        setGroupLoading(false);
+      let summaryMessage = `Asignación para ${selectedProvince} completada. Éxitos: ${successCount}, Fallos: ${failCount}.`;
+      if (failedAssignments.length > 0) {
+        summaryMessage += " Detalles de fallos: " + failedAssignments.map(f => `${f.voter}: ${f.error}`).join("; ");
+        console.error("Fallos en asignación grupal:", failedAssignments);
       }
-    };
-  
-    return (
+
+      setGroupStatus(summaryMessage);
+    } catch (error) {
+      console.error('Error en handleGroupAssign:', error);
+      setGroupStatus('Error durante la asignación grupal: ' + error.message);
+    } finally {
+      setGroupLoading(false);
+    }
+  };
+
+  return (
     <>
       <div className="mb-3">
         <h5>Asignar tokens a votante</h5>
@@ -210,7 +213,8 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
           <button
             className="btn btn-secondary"
             onClick={handleGroupAssign}
-            disabled={groupLoading || !selectedProvince || !groupAmount}
+            disabled={groupLoading || !selectedProvince || !groupAmount || !hasVoters}
+            title={!hasVoters ? 'No hay votantes registrados para esta provincia' : undefined}
           >
             {groupLoading ? "Asignando..." : "Asignar a Provincia"}
           </button>
@@ -218,8 +222,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         {groupStatus && <div className="text-info">{groupStatus}</div>}
       </div>
     </>
-    );
-  };
-  
+  );
+};
 
 export default AssignTokens;
