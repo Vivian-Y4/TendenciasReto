@@ -6,14 +6,15 @@ import { setupWeb3Provider } from '../utils/web3Utils';
 export const authService = {
   /**
    * Conecta con MetaMask y autentica al usuario
-   * @param {string} userName - Nombre del usuario (opcional)
    * @param {string} cedula - Cédula de identidad dominicana
+   * @param {string} clientSelectedProvince - Provincia seleccionada por el cliente
+   * @param {string} userName - Nombre del usuario (opcional)
    * @param {string} provincia - Provincia de residencia
-   * @returns {Promise<{success: boolean, address: string, token: string, name: string}|{success: boolean, error: string}>}
+   * @returns {Promise<{success: boolean, address: string, token: string, user: object}|{success: boolean, error: string}>}
    */
-  connectWallet: async (userName = '', cedula = '', provincia = '') => {
+  connectWallet: async (cedula, clientSelectedProvince, userName = '', provincia = '') => {
     try {
-      console.log('Iniciando conectWallet con:', { userName, cedula, provincia });
+      console.log('Iniciando conectWallet con:', { cedula, clientSelectedProvince, userName, provincia });
       
       // Validación de parámetros obligatorios
       if (!provincia) {
@@ -142,8 +143,9 @@ export const authService = {
             address,
             signature,
             message: nonceData.message,
-            name: userName || 'Usuario', // Asegurar que siempre haya un nombre
+            name: userName || 'Usuario',
             cedula: cleanCedula,
+            clientSelectedProvince, // Add this new field,
             provincia
           })
         });
@@ -168,9 +170,9 @@ export const authService = {
       // Autenticación exitosa
       return {
         success: true,
-        address,
+        address, // from signer.getAddress()
         token: authData.token,
-        name: authData.name || 'Usuario'
+        user: authData.user // Return the whole user object from backend
       };
     } catch (error) {
       console.error('Error en autenticación:', error);

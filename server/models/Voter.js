@@ -48,6 +48,13 @@ const voterSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  voterIdentifier: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true,
+    trim: true
+  },
   publicKey: {
     type: String,
     unique: true,

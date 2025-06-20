@@ -59,7 +59,7 @@ const CreateElection = ({ onElectionCreated }) => {
       setError('Todos los campos de la elección son obligatorios.');
       return false;
     }
-    if (['Municipal', 'Congresual'].includes(formData.electoralLevel) && !formData.province) {
+    if (['Municipal', 'Senatorial', 'Diputados'].includes(formData.electoralLevel) && !formData.province) {
       setError('Debe seleccionar una provincia para el nivel electoral seleccionado.');
       return false;
     }
@@ -245,12 +245,13 @@ const CreateElection = ({ onElectionCreated }) => {
                     <Form.Select name="electoralLevel" value={formData.electoralLevel} onChange={handleInputChange} required>
                       <option value="">Seleccione...</option>
                       <option value="Presidencial">Presidencial</option>
-                      <option value="Congresual">Congresual</option>
+                      <option value="Senatorial">Senatorial</option>
                       <option value="Municipal">Municipal</option>
+                      <option value="Diputados">Diputados</option>
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                {['Congresual', 'Municipal'].includes(formData.electoralLevel) && (
+                {['Senatorial', 'Municipal', 'Diputados'].includes(formData.electoralLevel) && (
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label>Provincia</Form.Label>

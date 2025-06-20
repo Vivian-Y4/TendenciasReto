@@ -44,13 +44,20 @@ const authenticate = async (req, res, next) => {
     // Identificar el tipo de usuario basado en el contenido del token
     if (decoded.address) {
       // Token de User (basado en wallet)
-      const user = await User.findOne({ address: decoded.address });
+      const user = await User.findOne({ address: decoded.address.toLowerCase() }); // Ensure address is compared lowercase
       
       if (!user) {
-        throw new AppError('Usuario no encontrado', 404);
+        throw new AppError('Usuario no encontrado para el token', 404);
       }
       
-      req.user = user;
+      // Augment user object with details from JWT payload for this request context
+      const augmentedUser = user.toObject(); // Convert to plain object to allow adding properties
+      augmentedUser.province = decoded.province; // Get from JWT payload
+      augmentedUser.voterIdentifier = decoded.voterIdentifier; // Get from JWT payload
+      // Ensure isAdmin is also correctly sourced, if it's in JWT or reliably on User model
+      augmentedUser.isAdmin = decoded.isAdmin || user.isAdmin;
+
+      req.user = augmentedUser;
       req.userType = 'blockchain';
     } else if (decoded.id) {
       // Token de Voter (basado en MongoDB id)
