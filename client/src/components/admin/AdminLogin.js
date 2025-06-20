@@ -78,7 +78,7 @@ const AdminLogin = () => {
                       <Form.Label>Usuario</Form.Label>
                       <Form.Control
                         type="text"
-                        placeholder="Ingrese su nombre de usuario (katriel)"
+                        placeholder="Ingrese su nombre de usuario"
                         value={username}
                         onChange={handleUsernameChange}
                         disabled={isLoading}

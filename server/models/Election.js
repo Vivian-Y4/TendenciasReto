@@ -100,14 +100,14 @@ const electionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'El nivel electoral es obligatorio.'],
     trim: true,
-    enum: ['Presidencial', 'Congresual', 'Municipal']
+    enum: ['Presidencial', 'Senatorial', 'Municipal']
   },
   province: {
     type: String,
     trim: true,
     // Es requerido condicionalmente, pero la lógica se maneja en el controlador
     required: function() {
-      return this.electoralLevel === 'Congresual' || this.electoralLevel === 'Municipal';
+      return this.electoralLevel === 'Senatorial' || this.electoralLevel === 'Municipal';
     }
   },
   
