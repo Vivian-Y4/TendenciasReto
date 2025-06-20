@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
-const Voter = require('../models/Voter');
+const Voter = require('../models/Voter'); // Se utilizará solo cuando el usuario emita un voto
+const User = require('../server/models/User'); // Ajuste de ruta al modelo User
 const crypto = require('crypto');
+const { ethers } = require('ethers');
 
 // Store for nonces (in a production environment, use Redis or a database)
 const nonceStore = new Map();
@@ -22,7 +24,18 @@ exports.register = async (req, res) => {
       publicKey
     });
 
-    await voter.save();
+    try {
+      await voter.save();
+    } catch (err) {
+      // Manejar error de clave duplicada (índice compuesto nationalId + province o walletAddress único)
+      if (err.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: 'La cédula ya está registrada en esa provincia o la billetera ya existe.'
+        });
+      }
+      throw err;
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -135,16 +148,15 @@ exports.getNonce = async (req, res) => {
 // Verify signature for MetaMask authentication
 exports.verifySignature = async (req, res) => {
   try {
-    const { address, signature, message, name, cedula } = req.body;
-    
-    if (!address || !signature || !message || !cedula) {
+    const { address, signature, message, name, cedula, provincia } = req.body;
+
+    if (!address || !signature || !message || !cedula || !provincia) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required parameters'
+        message: 'Faltan parámetros requeridos, incluyendo la provincia.'
       });
     }
-    
-    // Validar formato de cédula dominicana (debe comenzar con 012 o 402 y tener 11 dígitos)
+
     const cedulaRegex = /^(012|402)\d{8}$/;
     if (!cedulaRegex.test(cedula)) {
       return res.status(400).json({
@@ -152,91 +164,101 @@ exports.verifySignature = async (req, res) => {
         message: 'Formato de cédula inválido'
       });
     }
-    
-    // Verificar si la cédula ya está registrada por otro usuario
-    const existingVoterWithCedula = await Voter.findOne({ cedula, walletAddress: { $ne: address } });
-    if (existingVoterWithCedula) {
-      return res.status(400).json({
-        success: false,
-        message: 'Esta cédula ya está registrada por otro usuario'
-      });
-    }
-    
-    // Extract nonce from message to verify it's one we generated
-    const nonceMatch = message.match(/Nonce: ([0-9a-f]+)/);
-    if (!nonceMatch || !nonceMatch[1]) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid message format'
-      });
-    }
-    
-    const nonce = nonceMatch[1];
-    const storedNonce = nonceStore.get(nonce);
-    
-    // Verify nonce exists and hasn't expired
-    if (!storedNonce || storedNonce.expires < Date.now()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nonce expired or invalid'
-      });
-    }
-    
-    // Verify that the message matches
-    if (storedNonce.message !== message) {
-      return res.status(400).json({
-        success: false,
-        message: 'Message mismatch'
-      });
-    }
-    
-    // Verify the signature (ethers.js does this on the frontend before sending)
-    // Here we would normally verify the signature matches the address
-    // For simplicity, we'll assume it's valid if we got this far
-    
-    // Find or create voter
-    let voter = await Voter.findOne({ walletAddress: address });
-    
-    if (!voter) {
-      // Create new voter if they don't exist
-      voter = new Voter({
-        walletAddress: address,
-        name: name || `Usuario ${address.substring(0, 6)}...`, // Usar nombre proporcionado o generar uno basado en la dirección
-        cedula: cedula, // Agregar la cédula de identidad
-        publicKey: address // Use address as publicKey for simplicity
-      });
-      await voter.save();
-    } else {
-      // Actualizar la cédula si el votante ya existe pero no tiene cédula
-      if (!voter.cedula) {
-        voter.cedula = cedula;
-        await voter.save();
+
+    console.log('Verificando firma con los siguientes datos:', req.body);
+
+    // Buscar coincidencias en la colección de usuarios
+    const existingUser = await User.findOne({ 
+      $or: [{ nationalId: cedula }, { address: address.toLowerCase() }] 
+    });
+
+    console.log('Usuario existente encontrado:', existingUser);
+
+    if (existingUser) {
+      // Si la misma wallet está asociada a otra cédula
+      if (existingUser.nationalId !== cedula) {
+        return res.status(409).json({
+          success: false,
+          message: 'Esta billetera ya está registrada con una cédula diferente.'
+        });
+      }
+      // Si la misma cédula está asociada a otra wallet
+      if (existingUser.address.toLowerCase() !== address.toLowerCase()) {
+        return res.status(409).json({
+          success: false,
+          message: 'Esta cédula ya está registrada con una billetera diferente.'
+        });
+      }
+      // Si la provincia no coincide
+      if (existingUser.province !== provincia) {
+        return res.status(409).json({
+          success: false,
+          message: 'Esta cédula ya está registrada en una provincia diferente.'
+        });
       }
     }
-    
-    // Delete the nonce to prevent reuse
-    nonceStore.delete(nonce);
-    
-    // Generate JWT token
+
+    // Verificar la firma
+    const recoveredAddress = ethers.utils.verifyMessage(message, signature);
+    if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
+      return res.status(401).json({ success: false, message: 'Firma inválida.' });
+    }
+
+    let user = existingUser;
+    if (!user) {
+      // Si el usuario no existe, se crea uno nuevo
+      console.log('Creando nuevo usuario...');
+      user = new User({
+        address: address.toLowerCase(),
+        name,
+        nationalId: cedula,
+        province: provincia,
+        isVerified: true,
+        roles: 'voter', // Role simple
+      });
+      console.log('Intentando guardar usuario en MongoDB:', user.toObject());
+      try {
+        await user.save();
+        console.log('Usuario guardado correctamente.');
+      } catch (err) {
+        console.error('Error guardando User:', err);
+        // Manejar error de clave duplicada (índice compuesto nationalId + province o walletAddress único)
+        if (err.code === 11000) {
+          return res.status(409).json({
+            success: false,
+            message: 'La cédula ya está registrada en esa provincia o la billetera ya existe.'
+          });
+        }
+        throw err;
+      }
+      console.log('Nuevo usuario guardado exitosamente:', user);
+    }
+
+    // Generar token JWT para la sesión
     const token = jwt.sign(
-      { id: voter._id, walletAddress: voter.walletAddress },
+      { id: (existingUser ? existingUser._id : user._id), walletAddress: address.toLowerCase() },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '1h',
+      }
     );
-    
-    res.json({
+
+    res.status(200).json({
       success: true,
-      message: 'Authentication successful',
+      message: 'Autenticación exitosa.',
       token,
-      address: voter.walletAddress,
-      name: voter.name
+      user: {
+        id: (existingUser ? existingUser._id : user._id),
+        name: (existingUser ? existingUser.name : user.name),
+        roles: (existingUser ? existingUser.roles : user.roles),
+      },
     });
+
   } catch (error) {
-    console.error('Error verifying signature:', error);
+    console.error('Error al verificar la firma:', error);
     res.status(500).json({
       success: false,
-      message: 'Error verifying signature',
-      error: error.message
+      message: 'Error en el servidor al verificar la firma',
+      error: error.message,
     });
   }
 };

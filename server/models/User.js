@@ -29,6 +29,14 @@ const UserSchema = new mongoose.Schema({
     index: true,
     default: null // Provincia de la República Dominicana
   },
+  // Cédula dominicana
+  nationalId: {
+    type: String,
+    required: true,
+    unique: true, // Impide registro duplicado con distinta provincia
+    trim: true,
+    match: [/^(012|402)\d{8}$/, 'Formato de cédula inválido']
+  },
   
   // Roles y permisos
   isAdmin: {

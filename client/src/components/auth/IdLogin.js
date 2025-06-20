@@ -1,10 +1,10 @@
-
 import React, { useState, useContext, useEffect } from 'react';
 import { Card, Button, Container, Row, Col, Form, InputGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { ethers } from 'ethers';
+import { authService } from '../../services/authService';
 
 const IdLogin = ({ onLoginSuccess }) => {
   const { t } = useTranslation();
@@ -107,8 +107,18 @@ const IdLogin = ({ onLoginSuccess }) => {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const address = await signer.getAddress();
-      // Pass province along with cedula in login flow (update as needed in parent)
-      onLoginSuccess(address, provider, signer, cedula, province);
+
+      // Enviar datos al backend para registrar/validar al usuario
+      const cleanCedula = cedula.replace(/[-\s]/g, '');
+      const defaultName = `Usuario ${Date.now().toString().slice(-4)}`;
+      const result = await authService.connectWallet(defaultName, cleanCedula, province);
+      if (!result.success) {
+        alert(result.error || 'Error autenticando al usuario');
+        return;
+      }
+
+      // Llamar callback del padre para actualizar contexto/estado global
+      onLoginSuccess(address, provider, signer, cleanCedula, province);
     } catch (error) {
       if (error.code === 4001) {
         alert('Debes aprobar la conexión en MetaMask.');

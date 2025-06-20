@@ -16,11 +16,13 @@ const ConnectWallet = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Recuperar la cédula del estado de navegación
+  // Recuperar la cédula y provincia del estado de navegación
   const initialCedula = location.state?.cedula || '';
-  console.log('Recibiendo cédula del estado:', initialCedula);
+  const initialProvincia = location.state?.provincia || '';
+  console.log('Recibiendo datos del estado:', { initialCedula, initialProvincia });
   
   const [cedula, setCedula] = useState(initialCedula);
+  const [provincia, setProvincia] = useState(initialProvincia);
   const [isValidCedula, setIsValidCedula] = useState(false);
 
   useEffect(() => {
@@ -132,6 +134,14 @@ const ConnectWallet = () => {
       return;
     }
     
+    // Verificar que tengamos una provincia válida
+    if (!provincia) {
+      console.error('Provincia vacía antes de conectar');
+      setError('Por favor seleccione una provincia válida');
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       // Verificar conexión de MetaMask
       const web3Setup = await setupWeb3Provider();
@@ -167,9 +177,9 @@ const ConnectWallet = () => {
       // Generar un nombre por defecto si no hay uno proporcionado
       const defaultName = `Usuario ${new Date().getTime().toString().slice(-4)}`;
       
-      // Usar el servicio de autenticación para conectar la wallet
-      console.log('Enviando al servicio:', { name: defaultName, cedula: cleanCedula });
-      const result = await authService.connectWallet(defaultName, cleanCedula);
+      // Usar el servicio de autenticación para conectar la wallet, incluyendo provincia
+      console.log('Enviando al servicio:', { name: defaultName, cedula: cleanCedula, provincia });
+      const result = await authService.connectWallet(defaultName, cleanCedula, provincia);
       
       if (!result.success) {
         throw new Error(result.error || t('auth.connection_failed'));

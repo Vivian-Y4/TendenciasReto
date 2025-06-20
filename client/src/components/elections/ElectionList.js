@@ -3,88 +3,91 @@ import { Container, Row, Col, Card, Badge, Button, Spinner } from 'react-bootstr
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthContext from '../../context/AuthContext';
+import AdminContext from '../../context/AdminContext';
 import { formatTimestamp, isElectionActive, hasElectionEnded } from '../../utils/contractUtils';
-import { ethers } from 'ethers';
 
 const ElectionList = () => {
   const { t } = useTranslation();
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { contract } = useContext(AuthContext);
+  const { contract, userProvince } = useContext(AuthContext);
+  const { isAdminAuthenticated } = useContext(AdminContext);
 
   useEffect(() => {
     fetchElections();
-  }, [contract]);
-
-  const fetchElectionsFromContract = async () => {
-    let totalElections = 0;
-    if (typeof contract.electionCount === 'function') {
-      const count = await contract.electionCount();
-      totalElections = count.toNumber();
-    } else if (typeof contract.getElectionsCount === 'function') {
-      const count = await contract.getElectionsCount();
-      totalElections = count.toNumber();
-    } else {
-      throw new Error('El contrato no expone un método de conteo de elecciones reconocido.');
-    }
-
-    const electionPromises = [];
-    for (let i = 0; i < totalElections; i++) {
-      electionPromises.push(contract.elections(i).catch(() => null));
-    }
-
-    const resolved = (await Promise.all(electionPromises)).filter(Boolean);
-
-    return resolved.map((election, index) => ({
-      id: index + 1,
-      title: election.title,
-      description: election.description ?? '',
-      startTime: election.startTime?.toNumber ? election.startTime.toNumber() : 0,
-      endTime: election.endTime?.toNumber ? election.endTime.toNumber() : 0,
-      candidateCount: election.candidateCount?.toNumber ? election.candidateCount.toNumber() : 0,
-      totalVotes: election.totalVotes?.toNumber ? election.totalVotes.toNumber() : 0,
-      isActive: election.isActive ?? isElectionActive(election)
-    }));
-  };
+  }, [contract, userProvince]);
 
   const fetchElections = async () => {
+    // Si hay contrato conectado úsalo; de lo contrario (ej. admin sin wallet) consulta la API
     if (!contract) {
-      setError('El contrato no está disponible. Por favor, conecta tu billetera primero.');
-      setLoading(false);
-      return;
+      if (!isAdminAuthenticated) {
+        setError("El contrato no está disponible. Por favor, conecta tu billetera primero.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL;
+        const res = await fetch(`${apiUrl}/api/elections`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Error obteniendo elecciones');
+
+        const allElections = json.data || json.elections || [];
+        setElections(allElections);
+        return;
+      } catch (apiErr) {
+        console.error('Error al obtener elecciones desde la API:', apiErr);
+        setError(apiErr.message || 'Error al obtener elecciones desde la API');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
       setLoading(true);
       setError('');
 
-      let backendElections = [];
-      try {
-        const token = localStorage.getItem('auth_token');
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const apiUrl = `${process.env.REACT_APP_API_URL}/api/elections`;
-        const response = await fetch(apiUrl, { method: 'GET', headers });
-        const data = await response.json();
-
-        if (response.ok && data.success && Array.isArray(data.data)) {
-          backendElections = data.data;
-        }
-      } catch (apiErr) {
-        console.warn('Fallo al obtener elecciones vía backend, se usará fallback al contrato:', apiErr.message);
+      const count = await contract.electionCount();
+      const totalElections = count.toNumber();
+      
+      if (totalElections === 0) {
+        setElections([]);
+        setError('Aún no se han creado elecciones en la blockchain.');
+        setLoading(false);
+        return;
       }
 
-      if (backendElections.length === 0) {
-        const contractElections = await fetchElectionsFromContract();
-        setElections(contractElections);
-      } else {
-        setElections(backendElections);
+      const electionPromises = [];
+      // Los IDs de las elecciones en el contrato van de 1 a electionCount
+      for (let i = 1; i <= totalElections; i++) {
+        electionPromises.push(contract.elections(i));
       }
-    } catch (err) {
-      console.error('Error al cargar las elecciones:', err);
-      setError('Ocurrió un error al cargar las elecciones. Revisa la consola para más detalles.');
+
+      const resolvedElections = await Promise.all(electionPromises);
+
+      const formattedElections = resolvedElections.map((election, index) => ({
+        id: index + 1, // El ID es el índice del bucle + 1
+        title: election.title,
+        description: election.description,
+        startTime: election.startTime.toNumber(),
+        endTime: election.endTime.toNumber(),
+        candidateCount: election.candidateCount.toNumber(),
+        totalVotes: election.totalVotes.toNumber(),
+      }));
+
+      // Filtrar elecciones: mostrar todas las presidenciales y las que coinciden con provincia
+      const province = typeof userProvince === 'string' ? userProvince.trim().toLowerCase() : '';
+      const filtered = formattedElections.filter((el) => {
+        const isPresidential = el.title.toLowerCase().includes('presiden');
+        const matchesProvince = province && (el.description || '').toLowerCase().includes(province);
+        return isPresidential || matchesProvince;
+      });
+      setElections(filtered);
+
+    } catch (e) {
+      console.error('Error al obtener las elecciones del contrato:', e);
+      setError('Ocurrió un error al cargar las elecciones desde la blockchain. Por favor, revisa la consola para más detalles.');
     } finally {
       setLoading(false);
     }
@@ -143,23 +146,21 @@ const ElectionList = () => {
             <Card className="h-100 shadow-sm">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                  <Card.Title>{election.title || 'Untitled Election'}</Card.Title>
-                  {getStatusBadge({ startTime: election.startDate, endTime: election.endDate, status: election.status })}
+                  <Card.Title>{election.title}</Card.Title>
+                  {getStatusBadge(election)}
                 </div>
-                <Card.Text>{election.description || 'No description available.'}</Card.Text>
+                <Card.Text>{election.description}</Card.Text>
                 <div className="small text-muted mb-3">
-                  <div><strong>Nivel:</strong> {election.level}</div>
-                  {election.province && <div><strong>Provincia:</strong> {election.province}</div>}
-                  <div><strong>Inicio:</strong> {formatTimestamp(election.startDate)}</div>
-                  <div><strong>Fin:</strong> {formatTimestamp(election.endDate)}</div>
-                  {/* <div><strong>Candidates:</strong> {election.candidateCount || 'N/A'}</div>
-                  <div><strong>Total Votes:</strong> {election.totalVotes || 'N/A'}</div> */}
+                  <div><strong>Start:</strong> {formatTimestamp(election.startTime)}</div>
+                  <div><strong>End:</strong> {formatTimestamp(election.endTime)}</div>
+                  <div><strong>Candidates:</strong> {election.candidateCount}</div>
+                  <div><strong>Total Votes:</strong> {election.totalVotes}</div>
                 </div>
               </Card.Body>
               <Card.Footer className="bg-white">
                 <Button 
                   as={Link} 
-                  to={`/elections/${election._id || election.id}`}
+                  to={`/elections/${election.id}`} 
                   variant="outline-primary" 
                   className="w-100"
                 >

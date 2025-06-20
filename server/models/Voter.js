@@ -86,8 +86,8 @@ const voterSchema = new mongoose.Schema({
   nationalId: {
     type: String,
     trim: true,
-    unique: true,
-    sparse: true // Permite que sea null/undefined
+    unique: true, // Impide la misma cédula en cualquier provincia
+    index: true,
   },
   
   // Información de autenticación
@@ -184,7 +184,11 @@ const voterSchema = new mongoose.Schema({
     type: Schema.Types.ObjectId,
     ref: 'Admin'
   },
-  notes: String
+  notes: String,
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
 }, {
   timestamps: true
 });
@@ -192,6 +196,9 @@ const voterSchema = new mongoose.Schema({
 // Índices únicos ya se crean por las propiedades `unique`, por lo que no es necesario duplicarlos
 //voterSchema.index({ walletAddress: 1 });
 //voterSchema.index({ publicKey: 1 });
+
+// Índice compuesto para evitar cédula duplicada en distinta provincia
+voterSchema.index({ nationalId: 1, province: 1 }, { unique: true, sparse: false });
 
 // Method to check if voter is eligible
 voterSchema.methods.isEligible = function() {
@@ -206,6 +213,6 @@ voterSchema.methods.castVote = function(signature) {
   return this.save();
 };
 
-const Voter = mongoose.model('Voter', voterSchema);
+const Voter = mongoose.models.Voter || mongoose.model('Voter', voterSchema);
 
 module.exports = Voter; 

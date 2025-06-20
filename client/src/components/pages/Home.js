@@ -106,7 +106,7 @@ const Home = () => {
               </Card.Text>
               <Button
                 as={Link}
-                to={isAdmin ? '/admin' : '/elections'}
+                to={isAdmin ? '/admin' : '/results'}
                 variant="outline-primary"
               >
                 {isAdmin ? t('home.admin_section.button') : t('home.results_section.button')}
