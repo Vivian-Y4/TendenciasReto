@@ -42,11 +42,12 @@ async function main() {
       envContent = fs.readFileSync(envPath, "utf8");
     }
 
-    // Update REACT_APP_VOTING_ADDRESS
-    if (envContent.includes("REACT_APP_VOTING_ADDRESS=")) {
-      envContent = envContent.replace(/REACT_APP_VOTING_ADDRESS=.*/, `REACT_APP_VOTING_ADDRESS=${votingSystem.address}`);
+    // Update REACT_APP_CONTRACT_ADDRESS
+    const envVariable = "REACT_APP_CONTRACT_ADDRESS";
+    if (envContent.includes(envVariable)) {
+      envContent = envContent.replace(new RegExp(`^${envVariable}=.*`, "m"), `${envVariable}=${votingSystem.address}`);
     } else {
-      envContent += `\nREACT_APP_VOTING_ADDRESS=${votingSystem.address}`;
+      envContent += `\n${envVariable}=${votingSystem.address}`;
     }
 
     // Update REACT_APP_VERIFIER_ADDRESS

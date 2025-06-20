@@ -1,11 +1,13 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { Container, Card, Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
+import { Container, Card, Form, Button, Row, Col, Alert, Spinner, ListGroup, InputGroup } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import AuthContext from '../../context/AuthContext';
+import AdminContext from '../../context/AdminContext'; // Importar AdminContext
 import { PROVINCES } from '../../constants/provinces';
+import { setupWeb3Provider } from '../../utils/web3Utils';
+import { getContractInstance } from '../../utils/contractUtils';
 
-const CreateElection = () => {
+const CreateElection = ({ onElectionCreated }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -13,22 +15,22 @@ const CreateElection = () => {
     startTime: '',
     endDate: '',
     endTime: '',
-    level: '',
+    electoralLevel: '',
     province: ''
   });
 
+  const [candidates, setCandidates] = useState([]);
+  const [candidateName, setCandidateName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { isAuthenticated, isAdmin } = useContext(AuthContext);
-  const navigate = useNavigate();
+  const { connectWalletForAdmin } = useContext(AuthContext); // Obtener función para conectar
+  const { isAdminAuthenticated, adminWalletAddress } = useContext(AdminContext); // Usar AdminContext para la autenticación y la dirección del admin
 
   useEffect(() => {
-    // Redirect if not authenticated or not admin
-    if (!isAuthenticated || !isAdmin) {
-      navigate('/');
-      return;
+    if (!isAdminAuthenticated) {
+      toast.warn('Acceso denegado. Se requieren privilegios de administrador.');
     }
-  }, [isAuthenticated, isAdmin, navigate]);
+  }, [isAdminAuthenticated]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -38,41 +40,41 @@ const CreateElection = () => {
     });
   };
 
+  const handleAddCandidate = () => {
+    if (candidateName.trim() && !candidates.includes(candidateName.trim())) {
+      setCandidates([...candidates, candidateName.trim()]);
+      setCandidateName('');
+    } else {
+      toast.warn('El nombre del candidato no puede estar vacío o ya existe.');
+    }
+  };
+
+  const handleRemoveCandidate = (indexToRemove) => {
+    setCandidates(candidates.filter((_, index) => index !== indexToRemove));
+  };
+
   const validateForm = () => {
-    if (!formData.title.trim()) {
-      setError('Election title is required');
+    setError('');
+    if (!formData.title.trim() || !formData.description.trim() || !formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime || !formData.electoralLevel) {
+      setError('Todos los campos de la elección son obligatorios.');
       return false;
     }
-    if (!formData.description.trim()) {
-      setError('Election description is required');
+    if (['Municipal', 'Congresual'].includes(formData.electoralLevel) && !formData.province) {
+      setError('Debe seleccionar una provincia para el nivel electoral seleccionado.');
       return false;
     }
-    if (!formData.startDate || !formData.startTime) {
-      setError('Start date and time are required');
+    const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
+    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+    if (startDateTime >= endDateTime) {
+      setError('La fecha de fin debe ser posterior a la de inicio.');
       return false;
     }
-    if (!formData.endDate || !formData.endTime) {
-      setError('End date and time are required');
+    if (startDateTime < new Date()) {
+      setError('La fecha de inicio no puede ser en el pasado.');
       return false;
     }
-    if (!formData.level) {
-      setError('Election level is required');
-      return false;
-    }
-    if (["municipal","senatorial","diputados"].includes((formData.level||'').toLowerCase()) && !formData.province) {
-      setError('Debe seleccionar una provincia para elecciones regionales o municipales');
-      return false;
-    }
-    // Calculate timestamps
-    const startTimestamp = new Date(`${formData.startDate}T${formData.startTime}`).getTime();
-    const endTimestamp = new Date(`${formData.endDate}T${formData.endTime}`).getTime();
-    const now = Date.now();
-    if (startTimestamp < now) {
-      setError('La fecha y hora de inicio no puede ser menor a la fecha y hora actual');
-      return false;
-    }
-    if (endTimestamp <= startTimestamp) {
-      setError('La fecha y hora de fin debe ser mayor a la de inicio');
+    if (candidates.length < 2) {
+      setError('Debe añadir al menos dos candidatos a la elección.');
       return false;
     }
     return true;
@@ -81,213 +83,225 @@ const CreateElection = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
+
+    setLoading(true);
+    setError('');
+
     try {
-      setLoading(true);
-      setError('');
+      // 1. Verificar que la dirección del admin esté configurada
+      if (!adminWalletAddress) {
+        toast.error('La cuenta de administrador no tiene una dirección de billetera configurada.');
+        setError('No se puede crear una elección porque el perfil de administrador no está vinculado a una billetera. Por favor, actualice la configuración.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Preparar datos y crear la elección en la blockchain
       const startTimestamp = Math.floor(new Date(`${formData.startDate}T${formData.startTime}`).getTime() / 1000);
       const endTimestamp = Math.floor(new Date(`${formData.endDate}T${formData.endTime}`).getTime() / 1000);
-      const token = localStorage.getItem('adminToken');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:3333'}/api/admin/elections`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': token
-          },
-          body: JSON.stringify({
-            title: formData.title.trim(),
-            description: formData.description.trim(),
-            startTime: startTimestamp,
-            endTime: endTimestamp,
-            level: formData.level,
-            province: (formData.level === 'municipal' || formData.level === 'senatorial' || formData.level === 'diputados') ? formData.province : undefined
-          })
-        }
+
+      // Conectar con el proveedor y obtener el contrato
+      const web3Setup = await setupWeb3Provider();
+      if (!web3Setup) throw new Error("No se pudo conectar con la billetera.");
+      const { signer } = web3Setup;
+      const contract = await getContractInstance(signer);
+      if (!contract) throw new Error("No se pudo obtener la instancia del contrato.");
+
+      // Paso 1: Crear la elección sin candidatos
+      const createTx = await contract.createElection(
+        formData.title,
+        formData.description,
+        startTimestamp,
+        endTimestamp
       );
-      const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to create election');
-      toast.success('Election created successfully!');
-      navigate('/admin'); // Or to the list of elections
-    } catch (error) {
-      setError(error.message || 'Failed to create election. Please try again.');
-      toast.error(error.message || 'Failed to create election');
+      toast.info("Creando la elección en la blockchain... por favor espera.");
+      const createReceipt = await createTx.wait();
+
+      // Lógica de reintentos para encontrar el evento, manejando la latencia del nodo RPC
+      let event = null;
+      const retries = 5;
+      const delay = 2000; // 2 segundos
+
+      for (let i = 0; i < retries; i++) {
+        try {
+          const filter = contract.filters.ElectionCreated();
+          const logs = await contract.queryFilter(filter, createReceipt.blockNumber);
+          const foundEvent = logs.find(log => log.transactionHash === createReceipt.transactionHash);
+
+          if (foundEvent) {
+            console.log(`Evento 'ElectionCreated' encontrado en el intento ${i + 1}.`);
+            event = foundEvent;
+            break; // Salir del bucle si se encuentra el evento
+          }
+        } catch (e) {
+          console.warn(`Intento ${i + 1} para buscar el evento falló:`, e);
+        }
+
+        if (i < retries - 1) {
+          console.log(`Evento no encontrado, reintentando en ${delay / 1000} segundos...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      let electionId;
+      if (event) {
+        electionId = event.args.electionId.toNumber();
+      } else {
+        // Fallback: Si no se encuentra el evento, obtener el ID desde el contador del contrato.
+        console.warn("No se pudo encontrar el evento 'ElectionCreated'. Usando método alternativo para obtener el ID.");
+        toast.warn("No se pudo verificar el evento. Obteniendo ID desde el estado del contrato.");
+        
+        const count = await contract.electionCount();
+        electionId = count.toNumber() - 1;
+
+        if (electionId < 0) {
+          throw new Error("Error crítico: el contador de elecciones es inválido. No se puede continuar.");
+        }
+        console.log(`ID de elección obtenido por fallback: ${electionId}`);
+      }
+
+      // Paso 3: Añadir cada candidato a la elección recién creada en la blockchain
+      toast.info(`Añadiendo ${candidates.length} candidatos a la elección #${electionId}...`);
+      for (const candidateName of candidates) {
+        console.log(`Añadiendo candidato: ${candidateName} a la elección ${electionId}`);
+        const addCandidateTx = await contract.addCandidate(electionId, candidateName, ""); // Descripción vacía por ahora
+        await addCandidateTx.wait(); // Esperar a que cada candidato sea añadido
+        toast.success(`Candidato "${candidateName}" añadido a la elección #${electionId}.`);
+      }
+
+      // 4. Notificar al backend sobre la nueva elección
+      const token = localStorage.getItem('adminToken');
+      if (!token) throw new Error('No se encontró el token de autenticación.');
+
+      const electionDataForBackend = {
+        id: electionId,
+        title: formData.title,
+        description: formData.description,
+        startDate: new Date(startTimestamp * 1000).toISOString(),
+        endDate: new Date(endTimestamp * 1000).toISOString(),
+        electoralLevel: formData.electoralLevel,
+        province: formData.province || null,
+        candidates: candidates // Send candidates to backend as well
+      };
+
+      const response = await fetch('/api/admin/elections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+        body: JSON.stringify(electionDataForBackend),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Error al registrar la elección en el backend.');
+      }
+
+      toast.success(`¡Elección #${electionId} creada y registrada con éxito! Todos los candidatos han sido añadidos.`);
+      if (onElectionCreated) {
+        onElectionCreated(result);
+      }
+
+    } catch (err) {
+      if (err.code === 4001) { // MetaMask user rejected transaction
+        toast.error("Transacción rechazada por el usuario.");
+      } else {
+        setError(err.message || 'Ocurrió un error inesperado.');
+        toast.error(err.message || 'Error al crear la elección');
+        console.error("Error en handleSubmit de CreateElection:", err);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleConnectWallet = async () => {
+    await connectWalletForAdmin();
+  };
+
   return (
-    <Container>
-      {error && (
-        <Alert variant="danger" className="mt-3">{error}</Alert>
-      )}
-      <h2 className="mb-4">Crear Nueva Elección</h2>
-      <Card className="shadow-sm">
-        <Card.Body>
-          {error && <Alert variant="danger">{error}</Alert>}
-          <Form onSubmit={handleSubmit}>
-            <h5 className="mb-3">Detalles de la Elección</h5>
-            <Row className="mb-3">
-              <Col md={12}>
-                <Form.Group controlId="title">
-                  <Form.Label>Título de la Elección</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    placeholder="Ingrese el título de la elección"
-                    required
-                  />
-                </Form.Group>
-              </Col>
+    <Container className="my-4">
+      <Form onSubmit={handleSubmit}>
+        <Card className="mb-4">
+          <Card.Header><Card.Title as="h3">Detalles de la Elección</Card.Title></Card.Header>
+          <Card.Body>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Título</Form.Label><Form.Control type="text" name="title" value={formData.title} onChange={handleInputChange} required /></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Descripción</Form.Label><Form.Control as="textarea" name="description" rows={3} value={formData.description} onChange={handleInputChange} required /></Form.Group></Col>
             </Row>
-            <Row className="mb-3">
-              <Col md={12}>
-                <Form.Group controlId="description">
-                  <Form.Label>Descripción de la Elección</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Ingrese una descripción detallada"
-                    required
-                  />
-                </Form.Group>
-              </Col>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Fecha de Inicio</Form.Label><Form.Control type="date" name="startDate" value={formData.startDate} onChange={handleInputChange} required /></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Hora de Inicio</Form.Label><Form.Control type="time" name="startTime" value={formData.startTime} onChange={handleInputChange} required /></Form.Group></Col>
             </Row>
-            <Row className="mb-3">
-              <Col md={6} className="mb-3 mb-md-0">
-                <Form.Group controlId="startDate">
-                  <Form.Label>Fecha de Inicio</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="startDate"
-                    value={formData.startDate}
-                    onChange={handleInputChange}
-                    min={new Date().toISOString().split('T')[0]}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group controlId="startTime">
-                  <Form.Label>Hora de Inicio</Form.Label>
-                  <Form.Control
-                    type="time"
-                    name="startTime"
-                    value={formData.startTime}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Fecha de Fin</Form.Label><Form.Control type="date" name="endDate" value={formData.endDate} onChange={handleInputChange} required /></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Hora de Fin</Form.Label><Form.Control type="time" name="endTime" value={formData.endTime} onChange={handleInputChange} required /></Form.Group></Col>
             </Row>
-            <Row className="mb-4">
-              <Col md={6} className="mb-3 mb-md-0">
-                <Form.Group controlId="endDate">
-                  <Form.Label>Fecha de Fin</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="endDate"
-                    value={formData.endDate}
-                    onChange={handleInputChange}
-                    min={formData.startDate || new Date().toISOString().split('T')[0]}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group controlId="endTime">
-                  <Form.Label>Hora de Fin</Form.Label>
-                  <Form.Control
-                    type="time"
-                    name="endTime"
-                    value={formData.endTime}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            <Row className="mb-4">
-              <Col md={12}>
-                <Form.Group controlId="level">
-                  <Form.Label>Nivel de la Elección</Form.Label>
-                  <Form.Control
-                    as="select"
-                    name="level"
-                    value={formData.level}
-                    onChange={handleInputChange}
-                    required
-                  >
-                    <option value="">Seleccione el nivel</option>
-                    <option value="presidencial">Presidencial</option>
-                    <option value="senatorial">Senatorial</option>
-                    <option value="diputados">Diputados</option>
-                    <option value="municipal">Municipal</option>
-                  </Form.Control>
-                </Form.Group>
-              </Col>
-            </Row>
-            {['municipal','senatorial','diputados'].includes(formData.level?.toLowerCase()?.trim()) && (
-              <Row className="mb-4">
-                <Col md={12}>
-                  <Form.Group controlId="province">
-                    <Form.Label>Provincia</Form.Label>
-                    <Form.Control
-                      as="select"
-                      name="province"
-                      value={formData.province}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Seleccione una provincia</option>
-                      {PROVINCES.map((prov) => (
-                        <option key={prov} value={prov}>{prov}</option>
-                      ))}
-                    </Form.Control>
+            <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Nivel Electoral</Form.Label>
+                    <Form.Select name="electoralLevel" value={formData.electoralLevel} onChange={handleInputChange} required>
+                      <option value="">Seleccione...</option>
+                      <option value="Presidencial">Presidencial</option>
+                      <option value="Congresual">Congresual</option>
+                      <option value="Municipal">Municipal</option>
+                    </Form.Select>
                   </Form.Group>
                 </Col>
-              </Row>
-            )}
-            <div className="d-grid gap-2 mt-4">
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Spinner
-                      as="span"
-                      animation="border"
-                      size="sm"
-                      role="status"
-                      aria-hidden="true"
-                      className="me-2"
-                    />
-                    Creando elección...
-                  </>
-                ) : (
-                  'Crear Elección'
+                {['Congresual', 'Municipal'].includes(formData.electoralLevel) && (
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Provincia</Form.Label>
+                      <Form.Select name="province" value={formData.province} onChange={handleInputChange} required>
+                        <option value="">Seleccione...</option>
+                        {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
                 )}
-              </Button>
-              <Button
-                variant="outline-secondary"
-                onClick={() => navigate('/admin')}
-                disabled={loading}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </Form>
-        </Card.Body>
-      </Card>
+            </Row>
+          </Card.Body>
+        </Card>
+
+        <Card className="mb-4">
+          <Card.Header><Card.Title as="h3">Gestión de Candidatos</Card.Title></Card.Header>
+          <Card.Body>
+            <Form.Group>
+              <Form.Label>Añadir Candidato</Form.Label>
+              <InputGroup>
+                <Form.Control
+                  type="text"
+                  placeholder="Nombre del candidato"
+                  value={candidateName}
+                  onChange={(e) => setCandidateName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCandidate())}
+                />
+                <Button variant="outline-primary" onClick={handleAddCandidate}>Añadir</Button>
+              </InputGroup>
+            </Form.Group>
+            {candidates.length > 0 && (
+              <ListGroup className="mt-3">
+                {candidates.map((name, index) => (
+                  <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
+                    {name}
+                    <Button variant="danger" size="sm" onClick={() => handleRemoveCandidate(index)}>Quitar</Button>
+                  </ListGroup.Item>
+                ))}
+              </ListGroup>
+            )}
+          </Card.Body>
+        </Card>
+
+        {error && <Alert variant="danger">{error}</Alert>}
+
+        <div className="d-grid">
+          <Button variant="primary" size="lg" type="submit" disabled={loading || !isAdminAuthenticated}>
+            {loading ? <><Spinner as="span" animation="border" size="sm" /> Creando Elección...</> : 'Crear Elección y Registrar Candidatos'}
+          </Button>
+        </div>
+      </Form>
     </Container>
   );
 };

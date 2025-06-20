@@ -54,13 +54,12 @@ router.post('/:electionId/merkle-root', adminAuth, electionAdminController.setEl
 router.get('/:electionId/candidates', adminAuth, candidateAdminController.getCandidatesByElection);
 
 
-// --- Commenting out routes for functions that are currently stubbed or too complex for this subtask ---
-// /**
-//  * @route   GET /api/admin/elections
-//  * @desc    Obtener todas las elecciones con filtros
-//  * @access  Privado (Admin)
-//  */
-// router.get('/', adminAuth, electionAdminController.getElections);
+/**
+ * @route   GET /api/admin/elections
+ * @desc    Obtener todas las elecciones con filtros
+ * @access  Privado (Admin)
+ */
+router.get('/', adminAuth, electionAdminController.getElections);
 
 // /**
 //  * @route   GET /api/admin/elections/:id

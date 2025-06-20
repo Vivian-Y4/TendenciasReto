@@ -72,6 +72,8 @@ const getAdminWallet = (provider) => {
     return new ethers.Wallet(process.env.ADMIN_SIGNER_PRIVATE_KEY, provider);
 };
 
+
+
 const handleContractError = (error, contract, next, transactionHash = null) => {
     console.error("[ContractCallError] Details:", error);
     let revertReason = error.message;
@@ -92,80 +94,80 @@ const handleContractError = (error, contract, next, transactionHash = null) => {
  * @access  Privado (Admin)
  */
 const createElection = async (req, res, next) => {
-  console.log('[ElectionAdminCtrl] createElection endpoint hit.');
-  console.log('[ElectionAdminCtrl] Requesting admin user:', req.user ? req.user.username : 'N/A');
+  const {
+    id, // ID desde la blockchain
+    title,
+    description,
+    startDate,
+    endDate,
+    electoralLevel,
+    province,
+    candidates // ¡Aquí están nuestros candidatos!
+  } = req.body;
 
-  const { title, description, startDate, endDate } = req.body;
-
-  if (!title || !startDate || !endDate) {
-    return next(new AppError('Título, fecha de inicio y fecha de fin son obligatorios.', 400));
+  // Validar que el ID de la blockchain está presente
+  if (!id) {
+    return next(new AppError('El ID de la elección de la blockchain es requerido.', 400));
   }
 
-  const parsedStartDate = new Date(startDate);
-  const parsedEndDate = new Date(endDate);
-
-  if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
-    return next(new AppError('Fechas de inicio o fin inválidas. Usar formato ISO 8601.', 400));
-  }
-  if (parsedEndDate <= parsedStartDate) {
-    return next(new AppError('La fecha de fin debe ser posterior a la fecha de inicio.', 400));
-  }
-  if (parsedStartDate <= new Date()) {
-    console.warn(`[ElectionAdminCtrl] Warning: Election start date (${parsedStartDate.toISOString()}) is in the past or very soon.`);
+  // Validaciones básicas
+  if (!id || !title || !startDate || !endDate || !electoralLevel) {
+    return next(new AppError('Faltan campos requeridos para registrar la elección en el backend.', 400));
   }
 
-  const startTimeUnix = Math.floor(parsedStartDate.getTime() / 1000);
-  const endTimeUnix = Math.floor(parsedEndDate.getTime() / 1000);
+  if (!candidates || !Array.isArray(candidates) || candidates.length < 2) {
+    return next(new AppError('Se requiere una lista de al menos dos candidatos.', 400));
+  }
 
-  console.log(`[ElectionAdminCtrl] Calling 'VotingSystem.sol' -> createElection() with params: Title=${title}, Desc=${description || ""}, Start=${startTimeUnix}, End=${endTimeUnix}`);
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  let contract; // Define contract here to be available in catch block for error parsing
   try {
-    const { provider, contractABI, contractAddress } = setupProvider();
-    const adminWallet = getAdminWallet(provider);
-    contract = new ethers.Contract(contractAddress, contractABI, adminWallet);
-
-    const tx = await contract.createElection(title, description || "", startTimeUnix, endTimeUnix);
-    console.log(`[ElectionAdminCtrl] createElection TX sent. Hash: ${tx.hash}. Waiting for confirmation...`);
-    const receipt = await tx.wait();
-    console.log(`[ElectionAdminCtrl] createElection TX confirmed. Block: ${receipt.blockNumber}, Gas: ${receipt.gasUsed.toString()}`);
-      
-    const event = receipt.events?.find(e => e.event === 'ElectionCreated');
-    let blockchainElectionId = null;
-    if (event && event.args) {
-        blockchainElectionId = event.args.electionId ? event.args.electionId.toString() : (event.args[0] ? event.args[0].toString() : null);
-    }
-    console.log(`[ElectionAdminCtrl] Blockchain Election ID from event: ${blockchainElectionId}`);
-      
-    if (req.user && ActivityLog) {
-        try {
-            await ActivityLog.logActivity({
-                user: { id: req.user._id || req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
-                action: 'election_create_blockchain',
-                resource: { type: 'BlockchainElection', id: blockchainElectionId, name: title },
-                details: { transactionHash: tx.hash, startTimeUnix, endTimeUnix, blockNumber: receipt.blockNumber, gasUsed: receipt.gasUsed.toString() }
-            });
-        } catch (logError) {
-            console.error("[ElectionAdminCtrl] Failed to log activity for createElection:", logError);
-        }
+    // Verificar si la elección ya fue registrada para evitar duplicados
+    const existingElection = await Election.findOne({ contractElectionId: id }).session(session);
+    if (existingElection) {
+      // Si ya existe, simplemente retornamos éxito para no interrumpir el flujo del frontend
+      await session.abortTransaction();
+      return res.status(200).json({ success: true, message: 'La elección ya estaba registrada.', data: existingElection });
     }
 
-    res.status(201).json({
-      success: true,
-      message: "Elección creada exitosamente en la blockchain.",
-      data: {
-        blockchainElectionId,
-        transactionHash: receipt.transactionHash,
-        blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString(),
-        title,
-        description: description || "",
-        startTime: parsedStartDate.toISOString(),
-        endTime: parsedEndDate.toISOString(),
-      }
+    // 1. Crear la categoría electoral si es necesario
+    let category = await ElectoralCategory.findOne({ level: electoralLevel, province: province || null }).session(session);
+    if (!category) {
+      category = new ElectoralCategory({ level: electoralLevel, province: province || null });
+      await category.save({ session });
+    }
+
+    // 2. Crear la elección en la base de datos con el ID de la blockchain
+    const newElection = new Election({
+      contractElectionId: id.toString(),
+      title,
+      description,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      electoralLevel,
+      province: electoralLevel === 'Presidencial' ? null : province,
+      status: 'active', // Asumimos que si se registra desde el front, ya está activa en el contrato
+      candidates: candidates.map(name => ({ name: name })) // Mapeamos los nombres al formato del schema
     });
+    await newElection.save({ session });
+
+    // 3. Log de actividad
+    await ActivityLog.logActivity({
+      user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
+      action: 'election_registered_from_blockchain',
+      resource: { type: 'Election', id: newElection._id.toString(), name: newElection.title },
+      details: { contractId: id, startDate: newElection.startDate, endDate: newElection.endDate, level: category.level }
+    });
+
+    await session.commitTransaction();
+    res.status(201).json({ success: true, data: newElection });
+
   } catch (error) {
-    return handleContractError(error, contract, next);
+    await session.abortTransaction();
+    next(new AppError('Error al registrar la elección en el backend: ' + error.message, 500));
+  } finally {
+    session.endSession();
   }
 };
 
@@ -381,8 +383,8 @@ const getElections = async (req, res, next) => {
     // Simplified enrichment for brevity for this phase
     const enrichedElections = elections.map(e => ({ ...e.toObject(), candidateCount: 0, voterCount: 0, currentStatus: e.status }));
 
-    res.status(200).json({
-      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), data: enrichedElections
+        res.status(200).json({
+      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), elections: enrichedElections
     });
   } catch (error) {
     next(new AppError(`Error al obtener elecciones (MongoDB): ${error.message}`, 500));
@@ -409,7 +411,116 @@ const getElectionById = async (req, res, next) => {
   }
 };
 
-// updateElection, updateElectionStatus, deployElectionToBlockchain, syncElectionResults, publishElectionResults
+/**
+ * @desc    Actualizar una elección existente (MongoDB based)
+ * @route   PUT /api/admin/elections/:electionId
+ * @access  Privado (Admin)
+ */
+const updateElection = async (req, res, next) => {
+  const { electionId } = req.params;
+  const { title, description, electoralLevel, province, candidates } = req.body;
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const election = await Election.findById(electionId).session(session);
+    if (!election) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError('Elección no encontrada.', 404));
+    }
+
+    // Update election properties
+    const electionUpdateData = {};
+    if (title !== undefined) electionUpdateData.title = title;
+    if (description !== undefined) electionUpdateData.description = description;
+    if (electoralLevel !== undefined) electionUpdateData.electoralLevel = electoralLevel;
+
+    // Determine the final electoral level to correctly handle the province
+    const finalElectoralLevel = electoralLevel !== undefined ? electoralLevel : election.electoralLevel;
+
+    if (['Municipal', 'Congresual'].includes(finalElectoralLevel)) {
+      // If the province is explicitly being updated, apply the change.
+      if (province !== undefined) {
+        electionUpdateData.province = province;
+      }
+    } else {
+      // If the final level is 'Presidencial', the province must be cleared.
+      electionUpdateData.province = undefined;
+    }
+    Object.assign(election, electionUpdateData);
+
+    // Handle candidate deletions, additions, and updates
+    if (candidates && Array.isArray(candidates)) {
+      const newCandidateIds = candidates.map(c => c.id).filter(Boolean);
+      const existingCandidateIds = election.candidates.map(id => id.toString());
+
+      // 1. Find and delete candidates that were removed
+      const candidatesToDelete = existingCandidateIds.filter(id => !newCandidateIds.includes(id));
+      if (candidatesToDelete.length > 0) {
+        await Candidate.deleteMany({ _id: { $in: candidatesToDelete } }, { session });
+      }
+
+      // 2. Update existing candidates
+      for (const candData of candidates) {
+        if (candData.id && existingCandidateIds.includes(candData.id)) {
+          const candidateUpdateData = {};
+          if (candData.name) {
+            const nameParts = candData.name.trim().split(' ');
+            candidateUpdateData.firstName = nameParts.shift() || '';
+            candidateUpdateData.lastName = nameParts.join(' ') || '';
+          }
+          if (candData.description !== undefined) {
+            candidateUpdateData.politicalParty = candData.description;
+          }
+
+          if (Object.keys(candidateUpdateData).length > 0) {
+            await Candidate.findByIdAndUpdate(candData.id, candidateUpdateData, { session });
+          }
+        }
+      }
+      
+      // 3. Update the election's list of candidates to the new list
+      election.candidates = newCandidateIds;
+    }
+
+    const updatedElection = await election.save({ session });
+
+    if (req.user && ActivityLog) {
+      try {
+        const changesForLog = { ...electionUpdateData };
+        if (candidates) {
+          changesForLog.candidatesUpdated = candidates.length;
+        }
+        await ActivityLog.logActivity({
+            user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
+            action: 'election_updated',
+            resource: { type: 'Election', id: updatedElection._id, name: updatedElection.title },
+            details: { changes: changesForLog }
+        }, { session });
+      } catch (logError) {
+          console.error("[ElectionAdminCtrl] Failed to log activity for updateElection:", logError);
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const finalElection = await Election.findById(updatedElection._id).populate('candidates');
+
+    res.status(200).json({
+      success: true,
+      message: 'Elección actualizada exitosamente.',
+      data: finalElection
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error al actualizar la elección:', error);
+    next(new AppError('Error al actualizar la elección.', 500));
+  }
+};
 // remain heavily MongoDB-dependent and are more complex than simple contract interactions.
 // They are not updated for direct contract calls in this pass to keep focus.
 
@@ -418,9 +529,11 @@ module.exports = {
   addCandidateToElection,
   endElectionEndpoint,
   finalizeResultsEndpoint,
-  // getElections, // Commenting out MongoDB-based listing for now to avoid confusion
-  // getElectionById, // Commenting out MongoDB-based detail view
-  // updateElection,
+  setVerifierAddress,
+  setElectionMerkleRoot,
+  getElections,
+  getElectionById,
+  updateElection,
   // updateElectionStatus,
   // deployElectionToBlockchain,
   // syncElectionResults,
@@ -457,7 +570,7 @@ const setVerifierAddress = async (req, res, next) => {
     if (req.user && ActivityLog) {
         try {
             await ActivityLog.logActivity({
-                user: { id: req.user._id || req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
+                user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
                 action: 'contract_set_verifier',
                 resource: { type: 'VotingSystemContract', id: votingSystemAddress, name: 'VotingSystem' },
                 details: { verifierAddress: verifierAddress, transactionHash: tx.hash }
@@ -522,7 +635,7 @@ const setElectionMerkleRoot = async (req, res, next) => {
     if (req.user && ActivityLog) {
         try {
             await ActivityLog.logActivity({
-                user: { id: req.user._id || req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
+                user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
                 action: 'election_set_merkle_root',
                 resource: { type: 'BlockchainElection', id: numericElectionId.toString(), name: `Election ${numericElectionId.toString()}` },
                 details: { merkleRoot: merkleRoot, transactionHash: tx.hash }
@@ -550,9 +663,9 @@ module.exports = {
   finalizeResultsEndpoint,
   setVerifierAddress,
   setElectionMerkleRoot,
-  // getElections,
-  // getElectionById,
-  // updateElection,
+  getElections,
+  getElectionById,
+  updateElection,
   // updateElectionStatus,
   // deployElectionToBlockchain,
   // syncElectionResults,

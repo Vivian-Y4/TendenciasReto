@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const Election = require('../models/Election');
 const Voter = require('../models/Voter');
 const Vote = require('../models/Vote');
+const Candidate = require('../models/Candidate');
 
 // Store for nonces (in a production environment, use Redis or a database)
 const adminNonceStore = new Map();
@@ -34,6 +35,7 @@ exports.login = async (req, res, next) => {
           username: admin.username,
           name: admin.name,
           role: 'admin',
+          type: 'admin',
           permissions: admin.permissions
         },
         process.env.JWT_SECRET,
@@ -91,6 +93,54 @@ exports.getProfile = async (req, res) => {
       success: false, 
       message: 'Error de servidor', 
       error: error.message 
+    });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { walletAddress } = req.body;
+    const adminId = req.admin.id;
+
+    // Validación básica de la dirección de Ethereum
+    const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+    if (!walletAddress || !ethAddressPattern.test(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        message: 'La dirección de la billetera proporcionada es inválida.'
+      });
+    }
+
+    const admin = await Admin.findById(adminId);
+
+    if (!admin) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Administrador no encontrado' 
+      });
+    }
+
+    admin.walletAddress = walletAddress;
+    await admin.save();
+
+    res.json({
+      success: true,
+      message: 'Perfil actualizado exitosamente.',
+      admin: {
+        id: admin._id,
+        username: admin.username,
+        name: admin.name,
+        walletAddress: admin.walletAddress,
+        permissions: admin.permissions
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar el perfil del administrador:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error del servidor al actualizar el perfil.',
+      error: error.message
     });
   }
 };
@@ -165,6 +215,7 @@ exports.verifySignature = async (req, res) => {
         name: admin.name,
         walletAddress: address,
         role: 'admin',
+        type: 'admin',
         permissions: admin.permissions
       },
       process.env.JWT_SECRET,
@@ -217,110 +268,55 @@ exports.getElection = async (req, res) => {
 
 exports.createElection = async (req, res) => {
   try {
-    const allowedLevels = ['presidencial', 'senatorial', 'diputados', 'municipal'];
-    if (!allowedLevels.includes(req.body.level)) {
-      return res.status(400).json({ success: false, message: 'Nivel inválido' });
-    }
-
-    // Asegurarnos de que el campo createdBy esté presente (lo añade el middleware adminAuth)
-    // y convertir las fechas del frontend (segundos UNIX) a objetos Date si vienen como número
     const {
       title,
       description,
+      electoralLevel,
+      province,
       startDate,
       endDate,
-      level,
-      province,
-      municipality, // Added municipality
-      ...rest
+      registrationDeadline,
+      isPublic = true,
+      requiresRegistration = true,
     } = req.body;
 
+    // Explicit validation to provide a clear error message, addressing the user's issue.
+    if (!title || !description || !electoralLevel || !startDate || !endDate) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Título, descripción, nivel electoral, fecha de inicio y fin son obligatorios.' 
+      });
+    }
+
     const electionData = {
-      title: title || req.body.name, // Fallback for 'name' if used
-      name: req.body.name || title,   // Ensure both name and title are present
+      title,
       description,
-      startDate: typeof startDate === 'number' ? new Date(startDate * 1000) : new Date(startDate),
-      endDate: typeof endDate === 'number' ? new Date(endDate * 1000) : new Date(endDate),
-      level: level.toLowerCase(),
+      electoralLevel,
       province,
-      municipality, // Added municipality
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
+      isPublic,
+      requiresRegistration,
       createdBy: req.user?.id || req.admin?.id,
-      lastModifiedBy: req.user?.id || req.admin?.id,
-      ...rest // Spread other potential fields if any
+      status: 'draft'
     };
 
-    // Logic based on level
-    if (electionData.level === 'presidencial') {
-        electionData.province = undefined;
-        electionData.municipality = undefined;
-    } else if (electionData.level === 'senatorial' || electionData.level === 'diputados') {
-        electionData.municipality = undefined;
-    }
-    // For 'municipal' level, both province and municipality can be set.
-
     const election = await Election.create(electionData);
-    return res.status(201).json({ success: true, election });
+    return res.status(201).json({ success: true, message: 'Elección creada exitosamente.', election });
   } catch (error) {
     console.error('Error creating election:', error);
-    return res.status(500).json({ success: false, message: 'Error creating election', error: error.message });
+    if (error.name === 'ValidationError') {
+        return res.status(400).json({ success: false, message: `Error de validación: ${error.message}`, error: error.errors });
+    }
+    return res.status(500).json({ success: false, message: 'Error interno del servidor al crear la elección.', error: error.message });
   }
 };
 
 exports.updateElection = async (req, res) => {
   try {
-    const election = await Election.findById(req.params.id);
-    if (!election) {
-      return res.status(404).json({ success: false, message: 'Election not found' });
-    }
-
-    const { title, name, description, startDate, endDate, level, province, municipality, status } = req.body;
-
-    // Update fields
-    if (title || name) {
-        election.title = title || name;
-        election.name = name || title; // Ensure both are updated if one is provided
-    }
-    if (description !== undefined) election.description = description;
-    if (startDate) election.startDate = new Date(startDate);
-    if (endDate) election.endDate = new Date(endDate);
-    if (status) election.status = status; // Allow status updates
-
-    // Handle level, province, municipality updates with logic
-    if (level) {
-      election.level = level.toLowerCase();
-      if (election.level === 'presidencial') {
-        election.province = undefined;
-        election.municipality = undefined;
-      } else if (election.level === 'senatorial' || election.level === 'diputados') {
-        // If level changes to provincial, province might be set, municipality should be cleared
-        if (province !== undefined) election.province = province;
-        election.municipality = undefined;
-      } else if (election.level === 'municipal') {
-        // If level is municipal, both can be set
-        if (province !== undefined) election.province = province;
-        if (municipality !== undefined) election.municipality = municipality;
-      }
-    } else {
-      // Level is not changing, but province/municipality might be
-      if (election.level !== 'presidencial') { // Only update if not presidential
-          if (province !== undefined) election.province = province;
-          if (election.level === 'municipal') { // Only update municipality if level is municipal
-              if (municipality !== undefined) election.municipality = municipality;
-          } else {
-            // If not municipal level (e.g. senatorial, diputados), ensure municipality is undefined if explicitly passed as null or for safety
-            if (req.body.hasOwnProperty('municipality') && municipality === null) {
-                 election.municipality = undefined;
-            } else if (municipality !== undefined && election.level !== 'municipal') {
-                 // If municipality is provided for non-municipal level, ignore or clear it
-                 election.municipality = undefined;
-            }
-          }
-      }
-    }
-
-    election.lastModifiedBy = req.user?.id || req.admin?.id;
-
-    await election.save();
+    const election = await Election.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!election) return res.status(404).json({ success: false, message: 'Election not found' });
     res.json({ success: true, election });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error updating election', error: error.message });
@@ -333,6 +329,26 @@ exports.deleteElection = async (req, res) => {
     res.json({ success: true, message: `Elección ${req.params.id} eliminada` });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting election', error: error.message });
+  }
+};
+
+
+exports.getElectionCandidates = async (req, res) => {
+  try {
+    const { electionId } = req.params;
+
+    // Usar el método estático del modelo Candidate para encontrar candidatos activos
+    const candidates = await Candidate.find({ election: electionId, isActive: true });
+
+    res.json({ success: true, candidates });
+
+  } catch (error) {
+    console.error(`Error fetching candidates for election ${req.params.electionId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error del servidor al obtener los candidatos.',
+      error: error.message
+    });
   }
 };
 

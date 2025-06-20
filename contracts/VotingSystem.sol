@@ -264,7 +264,7 @@ contract VotingSystem is Ownable {
      * @dev Verifica que la elección esté activa
      */
     modifier electionActive(uint256 _electionId) {
-        require(elections[_electionId].isActive, "VotingSystem: la eleccion no esta activa");
+        require(elections[_electionId].isActive, "VotingSystem: la eleccion no encontrada activa");
         require(
             block.timestamp >= elections[_electionId].startTime,
             "VotingSystem: la eleccion aun no ha comenzado"
@@ -312,7 +312,7 @@ contract VotingSystem is Ownable {
     /**
      * @dev Constructor - establece el creador como administrador inicial
      */
-    constructor() Ownable(msg.sender) {
+    constructor() Ownable() {
         electionCount = 0;
         _reentrancyGuard = 0;
         // AdminAction event removed, Ownable's constructor emits OwnershipTransferred
@@ -332,7 +332,8 @@ contract VotingSystem is Ownable {
         string memory _title,
         string memory _description,
         uint256 _startTime,
-        uint256 _endTime
+        uint256 _endTime,
+        string[] memory _candidateNames
     ) public onlyAuthorized nonReentrant returns (uint256) {
         require(bytes(_title).length > 0, "VotingSystem: el titulo no puede estar vacio");
         require(bytes(_description).length > 0, "VotingSystem: la descripcion no puede estar vacia");
@@ -346,9 +347,11 @@ contract VotingSystem is Ownable {
             _endTime - _startTime <= MAX_ELECTION_DURATION,
             "VotingSystem: duracion muy larga"
         );
-        
+        require(_candidateNames.length > 1, "VotingSystem: se requieren al menos dos candidatos");
+        require(_candidateNames.length <= MAX_CANDIDATES_PER_ELECTION, "VotingSystem: demasiados candidatos");
+
         uint256 electionId = electionCount;
-        
+
         Election storage e = elections[electionId];
         e.title = _title;
         e.description = _description;
@@ -357,17 +360,22 @@ contract VotingSystem is Ownable {
         e.isActive = true;
         e.candidateCount = 0;
         e.totalVotes = 0;
-        e.registeredVoterCount = 0; // Initialize new counter
+        e.registeredVoterCount = 0;
         e.resultsFinalized = false;
         e.creator = msg.sender;
         e.createdAt = block.timestamp;
         e.updatedAt = block.timestamp;
-        e.merkleRoot = bytes32(0); // Initialize Merkle root
-        
+        e.merkleRoot = bytes32(0);
+
         electionCount++;
-        
+
+        // Add candidates
+        for (uint i = 0; i < _candidateNames.length; i++) {
+            _addCandidate(electionId, _candidateNames[i]);
+        }
+
         emit ElectionCreated(electionId, _title, _startTime, _endTime, msg.sender);
-        
+
         return electionId;
     }
     
@@ -407,6 +415,47 @@ contract VotingSystem is Ownable {
             e.endTime,
             msg.sender
         );
+    }
+
+    // ---- Funciones de Gestión de Candidatos ----
+
+    /**
+     * @dev Añade un candidato a una elección existente.
+     * @param _electionId ID de la elección.
+     * @param _name Nombre del candidato.
+     */
+    function addCandidate(
+        uint256 _electionId,
+        string memory _name
+    )
+        public
+        onlyAuthorized
+        electionExists(_electionId)
+        electionNotStarted(_electionId)
+    {
+        _addCandidate(_electionId, _name);
+    }
+
+    /**
+     * @dev Lógica interna para añadir un candidato.
+     * @param _electionId ID de la elección.
+     * @param _name Nombre del candidato.
+     */
+    function _addCandidate(uint256 _electionId, string memory _name) internal {
+        Election storage e = elections[_electionId];
+        require(e.candidateCount < MAX_CANDIDATES_PER_ELECTION, "VotingSystem: maximo de candidatos alcanzado");
+        require(bytes(_name).length > 0, "VotingSystem: el nombre del candidato no puede estar vacio");
+
+        uint256 candidateId = e.candidateCount;
+        e.candidates[candidateId] = Candidate({
+            name: _name,
+            description: "", // Descriptions can be added via updateCandidate
+            voteCount: 0,
+            addedAt: block.timestamp
+        });
+        e.candidateCount++;
+
+        emit CandidateAdded(_electionId, candidateId, _name, msg.sender);
     }
 
     /**
@@ -666,7 +715,7 @@ contract VotingSystem is Ownable {
 
         // Prepare public inputs array for the verifier.
         // Order: merkleRoot, nullifierHash, voteCommitment (as per IVerifier interface)
-        uint256[] memory publicInputs = new uint256[](3);
+        uint256[3] memory publicInputs;
         publicInputs[0] = uint256(_merkleRoot);
         publicInputs[1] = uint256(_nullifierHash);
         publicInputs[2] = uint256(_voteCommitment);
@@ -725,7 +774,7 @@ contract VotingSystem is Ownable {
      * @param _operator Dirección del operador a autorizar
      */
     function addOperator(address _operator) public onlyOwner {
-        require(_operator != address(0), "VotingSystem: dirección inválida");
+        require(_operator != address(0), "VotingSystem: direccion invalida");
         require(!authorizedOperators[_operator], "VotingSystem: ya es operador");
 
         authorizedOperators[_operator] = true;
@@ -799,7 +848,7 @@ contract VotingSystem is Ownable {
      * @dev Obtiene el estado de un votante usando su identificador.
      * @param _electionId ID de la elección.
      * @param _voterIdentifier Identificador del votante.
-     * @return Si está registrado y si ha votado.
+     * @return isRegistered Si está registrado.
      */
     function getVoterStatus(uint256 _electionId, bytes32 _voterIdentifier)
         public
@@ -817,7 +866,7 @@ contract VotingSystem is Ownable {
      *      hasVoted and voteTimestamp are removed due to anonymous voting.
      * @param _electionId ID de la elección.
      * @param _voterIdentifier Identificador del votante.
-     * @return Registrado.
+     * @return isRegistered Registrado.
      */
     function getVoterDetails(uint256 _electionId, bytes32 _voterIdentifier)
         public
@@ -906,10 +955,10 @@ contract VotingSystem is Ownable {
     }
 
     /**
-     * @dev Verifica si un votante ya ha emitido su voto usando su identificador.
+     * @dev Verifica si un voto ya ha sido emitido usando un nullifier hash.
      * @param _electionId ID de la elección.
-     * @param _voterIdentifier Identificador del votante.
-     * @return True si el votante ya ha votado.
+     * @param _nullifierHash Hash del nulificador a verificar.
+     * @return True si el nullifier ya ha sido usado.
      */
     function hasVoted(uint256 _electionId, bytes32 _nullifierHash)
         public

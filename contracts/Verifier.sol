@@ -40,27 +40,28 @@ contract Verifier is IVerifier {
     // The following are structural placeholders for these constants.
     // A real generated Verifier.sol would have these fields populated with large hex numbers.
 
-    uint256[2] public immutable vk_alpha_1;
-    uint256[2][2] public immutable vk_beta_2;
-    uint256[2][2] public immutable vk_gamma_2;
-    uint256[2][2] public immutable vk_delta_2;
-    uint256[2] public immutable vk_ic0; // For IC[0]
-    uint256[2][3] public immutable vk_ic_public; // For IC[1]...IC[N_PUBLIC_INPUTS]
+    uint256[2] public vk_alpha_1;
+    uint256[2][2] public vk_beta_2;
+    uint256[2][2] public vk_gamma_2;
+    uint256[2][2] public vk_delta_2;
+    uint256[2] public vk_ic0; // For IC[0]
+    uint256[2][3] public vk_ic_public; // For IC[1]...IC[N_PUBLIC_INPUTS]
 
     // Pairing precompile address
     address constant PAIRING_ADDRESS = address(0x08);
 
     constructor() {
         // In a real snarkjs export, the constructor would either be empty with constants defined above,
-        // or it would take the VK components as arguments to initialize immutable state variables.
+        // or it would take the VK components as arguments to initialize state variables.
         // For this simulation, we assume they are baked in or left as zero placeholders if not fully simulated.
         // Example placeholder values (NOT REAL):
-        vk_alpha_1 = [uint256(0x01), 0x02];
-        vk_beta_2 = [[0x03, 0x04], [0x05, 0x06]];
-        vk_gamma_2 = [[0x07, 0x08], [0x09, 0x0a]];
-        vk_delta_2 = [[0x0b, 0x0c], [0x0d, 0x0e]];
-        vk_ic0 = [0x0f, 0x10];
-        vk_ic_public = [[0x11, 0x12], [0x13, 0x14], [0x15, 0x16]]; // For 3 public inputs
+        // These are placeholder values. Actual verification keys should be passed to the constructor upon deployment.
+        // vk_alpha_1 = [0x01, 0x02];
+        // vk_beta_2 = [[0x03, 0x04], [0x05, 0x06]];
+        // vk_gamma_2 = [[0x07, 0x08], [0x09, 0x0a]];
+        // vk_delta_2 = [[0x0b, 0x0c], [0x0d, 0x0e]];
+        // vk_ic0 = [0x0f, 0x10];
+        // vk_ic_public = [[0x11, 0x12], [0x13, 0x14], [0x15, 0x16]]; // For 3 public inputs
     }
 
     function verifyProof(

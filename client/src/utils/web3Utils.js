@@ -7,49 +7,40 @@ import Web3 from "web3";
  * @returns {Promise<{provider: ethers.providers.Web3Provider, signer: ethers.Signer}|null>}
  */
 export const setupWeb3Provider = async () => {
-  try {
-    // Verificar si MetaMask está instalado
-    if (!window.ethereum) {
-      console.error('MetaMask no está instalado');
-      toast.error('MetaMask no está instalado. Por favor instala MetaMask para usar esta aplicación.');
-      return null;
-    }
+  // Asegurarse de que el objeto ethereum de MetaMask esté disponible.
+  if (typeof window.ethereum === 'undefined' || !window.ethereum.isMetaMask) {
+    console.error('MetaMask no está instalado o no es el proveedor activo.');
+    toast.error('Por favor, instala MetaMask y asegúrate de que sea tu billetera activa para usar esta aplicación.');
+    return null;
+  }
 
-    try {
-      // Solicitar conexión a MetaMask
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
-    } catch (requestError) {
-      console.error('Error al solicitar cuentas:', requestError);
-      if (requestError.code === 4001) {
-        toast.error('Conexión a MetaMask rechazada. Por favor conecta tu billetera para usar esta aplicación.');
-      } else {
-        toast.error('Error al conectar con MetaMask: ' + (requestError.message || 'Error desconocido'));
-      }
-      return null;
-    }
-    
-    // Crear provider y signer
+  try {
+    // Usar el proveedor inyectado por MetaMask
     const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
-    await provider.send('eth_requestAccounts', []);
+    
+    // Solicitar al usuario que conecte su cuenta. Esto abrirá MetaMask.
+    await provider.send("eth_requestAccounts", []);
+    
+    // Obtener el "signer" para firmar transacciones
     const signer = provider.getSigner();
     
     // Verificar que podemos obtener la dirección para confirmar la conexión
-    try {
-      const address = await signer.getAddress();
-      console.log('Conectado a la dirección:', address);
-    } catch (addressError) {
-      console.error('Error al obtener dirección:', addressError);
-      toast.error('Error al obtener la dirección de la billetera. Por favor intenta de nuevo.');
-      return null;
-    }
-    
+    const address = await signer.getAddress();
+    console.log('Conectado a la dirección:', address);
+
     // Configurar listeners para cambios de cuenta y red
     setupEthereumListeners();
     
     return { provider, signer };
+
   } catch (error) {
-    console.error('Error al configurar el proveedor web3:', error);
-    toast.error('Error al conectar con MetaMask: ' + (error.message || 'Error desconocido'));
+    console.error('Error al configurar el proveedor de Web3:', error);
+    // Manejar el caso en que el usuario rechaza la conexión
+    if (error.code === 4001) { // EIP-1193: User rejected request
+      toast.error('Conexión a MetaMask rechazada. Por favor, conecta tu billetera para continuar.');
+    } else {
+      toast.error(`Error al conectar con MetaMask: ${error.message || 'Error desconocido'}`);
+    }
     return null;
   }
 };

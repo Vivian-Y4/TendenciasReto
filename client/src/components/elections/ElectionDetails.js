@@ -1,278 +1,214 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Container, Row, Col, Card, Badge, Button, ListGroup, Spinner, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Badge, Button, ListGroup, Spinner, Alert, Form } from 'react-bootstrap';
+import { ethers } from 'ethers';
+import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import AuthContext from '../../context/AuthContext';
-import { formatTimestamp, isElectionActive, hasElectionEnded, canViewResults } from '../../utils/contractUtils';
-import RevealVoteForm from '../voting/RevealVoteForm'; // Import the new component
+import VotingTokenABI from '../../abis/VotingToken.json';
+import { formatTimestamp, isElectionActive, hasElectionEnded } from '../../utils/contractUtils';
 
 const ElectionDetails = () => {
+  // Hooks
+  const { id } = useParams();
+  const { isAuthenticated, userAddress, contract, signer } = useContext(AuthContext);
   const { t } = useTranslation();
-  const { id } = useParams(); // This is electionContractId
+
+  // State for election data and status
   const [election, setElection] = useState(null);
-  // voterStatus from backend now indicates if user is registered for this election,
-  // and if their *nullifier* has been used (if backend checks this for anonymous votes).
-  // For reveal, we primarily care if they have a pending reveal in localStorage.
-  const [voterStatus, setVoterStatus] = useState({ isRegistered: false, hasVoted: false }); // Keep for now
+  const [voterStatus, setVoterStatus] = useState({ isRegistered: false, hasVoted: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { isAuthenticated, userAddress, contract } = useContext(AuthContext);
+
+  // State for voting logic
+  const [selectedCandidateId, setSelectedCandidateId] = useState(null);
+  const [hasVotingToken, setHasVotingToken] = useState(false);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
+  const [isVoting, setIsVoting] = useState(false);
 
   const fetchElectionDetails = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Fetching from API
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections/${id}`);
       const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to fetch election details');
-      }
-      
-      setElection(data.data); // Adjusted to use data.data based on backend update
+      if (!data.success) throw new Error(data.message || 'Failed to fetch election details');
+      setElection(data.data);
       setError('');
-    } catch (error) {
-      console.error('Error fetching election details:', error);
+    } catch (err) {
+      console.error('Error fetching election details:', err);
       setError('Failed to load election details. Please try again later.');
     } finally {
       setLoading(false);
     }
-  }, [id]);  // Adding id as a dependency since it's used inside the function
+  }, [id]);
 
   const checkVoterStatus = useCallback(async () => {
+    if (!isAuthenticated || !userAddress) return;
     try {
-      if (!isAuthenticated || !userAddress) return;
-      
       const token = localStorage.getItem('auth_token');
-      
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/voters/status/${id}`,
-        {
-          headers: {
-            'x-auth-token': token
-          }
-        }
-      );
-      
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/voters/status/${id}`, { headers: { 'x-auth-token': token } });
       const data = await response.json();
-      
-      if (data.success) {
-        setVoterStatus(data.status);
-      }
-    } catch (error) {
-      console.error('Error checking voter status:', error);
-      // Not setting the main error state to avoid blocking the UI
+      if (data.success) setVoterStatus(data.status);
+    } catch (err) {
+      console.error('Error checking voter status:', err);
     }
   }, [isAuthenticated, userAddress, id]);
 
-  // Place useEffect hooks after function definitions
+  const checkTokenBalance = useCallback(async () => {
+    if (!election?.tokenAddress || !userAddress || !signer) {
+      setHasVotingToken(false);
+      setIsCheckingToken(false);
+      return;
+    }
+    setIsCheckingToken(true);
+    try {
+      const tokenContract = new ethers.Contract(election.tokenAddress, VotingTokenABI.abi, signer);
+      const balance = await tokenContract.balanceOf(userAddress);
+      setHasVotingToken(balance.gt(0));
+    } catch (err) {
+      console.error("Error checking token balance:", err);
+      setHasVotingToken(false);
+      toast.error("Could not verify your voting token.");
+    } finally {
+      setIsCheckingToken(false);
+    }
+  }, [election, userAddress, signer]);
+
   useEffect(() => {
     fetchElectionDetails();
-  }, [fetchElectionDetails, contract]);
+  }, [fetchElectionDetails]);
 
   useEffect(() => {
     if (isAuthenticated && userAddress && election) {
       checkVoterStatus();
+      checkTokenBalance();
     }
-  }, [isAuthenticated, userAddress, election, checkVoterStatus]);
+  }, [isAuthenticated, userAddress, election, checkVoterStatus, checkTokenBalance]);
 
-  const getStatusBadge = () => {
-    if (!election) return null;
-    
-    if (isElectionActive(election)) {
-      return <Badge bg="success">{t('elections.status.active')}</Badge>;
-    } else if (hasElectionEnded(election)) {
-      return <Badge bg="secondary">{t('elections.status.ended')}</Badge>;
-    } else {
-      return <Badge bg="warning">{t('elections.status.upcoming')}</Badge>;
+  const handleVote = async () => {
+    if (!selectedCandidateId) {
+      toast.warn("Please select a candidate before voting.");
+      return;
+    }
+    if (!contract) {
+      toast.error("Voting contract is not available. Please reconnect.");
+      return;
+    }
+    setIsVoting(true);
+    try {
+      const tx = await contract.vote(id, selectedCandidateId);
+      toast.info("Your vote is being submitted... Please wait for confirmation.");
+      await tx.wait();
+      toast.success("You have successfully voted!");
+      fetchElectionDetails();
+      checkVoterStatus();
+    } catch (err) {
+      console.error("Vote casting error:", err);
+      toast.error(err?.data?.message || err.reason || "Failed to cast vote.");
+    } finally {
+      setIsVoting(false);
     }
   };
 
+  const getStatusBadge = () => {
+    if (!election) return null;
+    if (isElectionActive(election)) return <Badge bg="success">{t('elections.status.active')}</Badge>;
+    if (hasElectionEnded(election)) return <Badge bg="secondary">{t('elections.status.ended')}</Badge>;
+    return <Badge bg="warning">{t('elections.status.upcoming')}</Badge>;
+  };
+
   if (loading) {
-    return (
-      <Container className="text-center my-5">
-        <Spinner animation="border" role="status" variant="primary">
-          <span className="visually-hidden">{t('common.loading')}</span>
-        </Spinner>
-        <p className="mt-3">{t('election_details.loading')}</p>
-      </Container>
-    );
+    return <Container className="text-center my-5"><Spinner animation="border" /><p className="mt-3">Loading Election...</p></Container>;
   }
 
   if (error) {
-    return (
-      <Container className="my-5">
-        <Alert variant="danger">{error}</Alert>
-        <Button variant="primary" onClick={fetchElectionDetails}>Retry</Button>
-      </Container>
-    );
+    return <Container className="my-5"><Alert variant="danger">{error}</Alert></Container>;
   }
 
   if (!election) {
-    return (
-      <Container className="my-5">
-        <Alert variant="warning">Election not found.</Alert>
-        <Button as={Link} to="/elections" variant="primary">
-          Back to Elections
-        </Button>
-      </Container>
-    );
+    return <Container className="my-5"><Alert variant="warning">Election not found.</Alert></Container>;
   }
 
-  return (
-    <Container>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Election Details</h2>
-        <Button as={Link} to="/elections" variant="outline-secondary">
-          Back to Elections
-        </Button>
-      </div>
-      
-      <Card className="mb-4 shadow-sm">
-        <Card.Body>
-          <div className="d-flex justify-content-between align-items-start mb-3">
-            <div>
-              <Card.Title className="fs-3">{election.title}</Card.Title>
-              <Card.Subtitle className="text-muted mb-2">ID: {election.id}</Card.Subtitle>
-            </div>
-            {getStatusBadge()}
-          </div>
-          
-          <Card.Text>{election.description}</Card.Text>
-          
-          <Row className="mt-4">
-            <Col md={6}>
-              <p className="mb-1"><strong>Start Time:</strong> {formatTimestamp(election.startTime)}</p>
-              <p className="mb-1"><strong>End Time:</strong> {formatTimestamp(election.endTime)}</p>
-            </Col>
-            <Col md={6}>
-              <p className="mb-1"><strong>Total Votes:</strong> {election.totalVotes}</p>
-              <p className="mb-1"><strong>Status:</strong> {election.isActive ? 'Active' : 'Inactive'}</p>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
-      
-      <Row>
-        <Col lg={8} className="mb-4">
-          {/* Conditionally render RevealVoteForm if election has ended, not finalized, and user has pending reveal */}
-          {isAuthenticated && election && hasElectionEnded(election) && !election.resultsFinalized && (
-            <RevealVoteForm election={election} />
-          )}
+  const renderVotingActions = () => {
+    if (!isAuthenticated) return <Alert variant="info">Please connect your wallet to participate.</Alert>;
+    if (voterStatus.hasVoted) return <Alert variant="success">You have already voted in this election.</Alert>;
+    if (hasElectionEnded(election)) return <Alert variant="secondary">This election has ended.</Alert>;
+    if (!isElectionActive(election)) return <Alert variant="info">This election has not started yet.</Alert>;
+    if (isCheckingToken) return <div className="text-center"><Spinner animation="grow" size="sm" /> Verifying token...</div>;
+    if (!hasVotingToken) return <Alert variant="warning">You do not have the required token to vote in this election.</Alert>;
 
+    return (
+      <Button onClick={handleVote} disabled={isVoting || !selectedCandidateId} className="w-100" size="lg">
+        {isVoting ? <><Spinner as="span" animation="border" size="sm" /> Submitting Vote...</> : 'Cast Your Vote'}
+      </Button>
+    );
+  };
+
+  return (
+    <Container className="my-5 election-details-page">
+      <Row className="mb-4">
+        <Col>
           <Card className="shadow-sm">
-            <Card.Header>
-              <h5 className="mb-0">Candidates ({election.candidates?.length || 0})</h5>
+            <Card.Header as="h4" className="d-flex justify-content-between align-items-center bg-light">
+              {election.title}
+              {getStatusBadge()}
             </Card.Header>
+            <Card.Body>
+              <Card.Text>{election.description}</Card.Text>
+              <Row>
+                <Col md={6}><strong>Start:</strong> {formatTimestamp(election.startTime)}</Col>
+                <Col md={6}><strong>End:</strong> {formatTimestamp(election.endTime)}</Col>
+              </Row>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row>
+        <Col lg={8} className="mb-4 mb-lg-0">
+          <Card className="shadow-sm h-100">
+            <Card.Header><h5 className="mb-0">Candidates</h5></Card.Header>
             <ListGroup variant="flush">
-              {election.candidates && election.candidates.length > 0 ? (
-                election.candidates.map((candidate) => (
-                  <ListGroup.Item key={candidate.id} className="py-3">
-                    <div className="d-flex justify-content-between align-items-center">
+              <Form>
+                {election.candidates && election.candidates.length > 0 ? (
+                  election.candidates.map((candidate) => (
+                    <ListGroup.Item key={candidate.id} action as="label" className="d-flex align-items-center">
+                      <Form.Check 
+                        type="radio" 
+                        name="candidate-selection"
+                        id={`candidate-${candidate.id}`}
+                        value={candidate.id}
+                        onChange={(e) => setSelectedCandidateId(e.target.value)}
+                        disabled={voterStatus.hasVoted || !isElectionActive(election) || !hasVotingToken || isVoting}
+                        className="me-3"
+                      />
                       <div>
                         <h5 className="mb-1">{candidate.name}</h5>
-                        <p className="mb-0">{candidate.description}</p>
+                        {candidate.description && <p className="mb-1 text-muted">{candidate.description}</p>}
                       </div>
-                      {canViewResults(election) && (
-                        <Badge bg="info" pill>
-                          {candidate.voteCount} votes
-                        </Badge>
-                      )}
-                    </div>
-                  </ListGroup.Item>
-                ))
-              ) : (
-                <ListGroup.Item className="text-center py-4">
-                  No candidates available for this election.
-                </ListGroup.Item>
-              )}
+                    </ListGroup.Item>
+                  ))
+                ) : (
+                  <ListGroup.Item className="text-center py-4">No candidates available.</ListGroup.Item>
+                )}
+              </Form>
             </ListGroup>
           </Card>
         </Col>
         
         <Col lg={4}>
           <Card className="shadow-sm mb-4">
-            <Card.Header>
-              <h5 className="mb-0">Actions</h5>
-            </Card.Header>
-            <Card.Body>
-              {!isAuthenticated ? (
-                <>
-                  <Alert variant="info">
-                    Connect your wallet to participate in this election.
-                  </Alert>
-                  <Button as={Link} to="/login" variant="primary" className="w-100">
-                    Connect Wallet
-                  </Button>
-                </>
-              ) : !voterStatus.isRegistered ? (
-                <Alert variant="warning">
-                  You are not registered for this election. Please contact the election administrator.
-                </Alert>
-              ) : voterStatus.hasVoted ? (
-                <Alert variant="success">
-                  {/* This message might need adjustment. If using nullifiers, "hasVoted" means a nullifier associated with user was used.
-                      If reveal is pending, they have "voted anonymously" but not yet "revealed".
-                      For now, if backend's /status indicates hasVoted=true, it implies their nullifier is spent.
-                  */}
-                  You have already participated in this election (vote cast or revealed).
-                </Alert>
-              ) : isElectionActive(election) ? (
-                <div className="text-center">
-                  <p>You are eligible to vote in this election.</p>
-                  <Button 
-                    as={Link} 
-                    to={`/elections/${election.id}/vote`} 
-                    variant="success" 
-                    size="lg" 
-                    className="w-100"
-                  >
-                    Cast Your Vote
-                  </Button>
-                </div>
-              ) : !hasElectionEnded(election) ? (
-                <Alert variant="info">
-                  This election has not started yet. Voting begins on {formatTimestamp(election.startTime)}.
-                </Alert>
-              ) : (
-                <Alert variant="secondary">
-                  This election has ended and is no longer accepting votes.
-                </Alert>
-              )}
-              
-              {(hasElectionEnded(election) || election.resultsFinalized) && (
-                <Button 
-                  as={Link} 
-                  to={`/elections/${election.id}/results`} 
-                  variant="outline-primary" 
-                  className="w-100 mt-3"
-                >
-                  View Results
-                </Button>
-              )}
+            <Card.Header><h5 className="mb-0">Your Action</h5></Card.Header>
+            <Card.Body className="text-center">
+              {renderVotingActions()}
             </Card.Body>
           </Card>
-          
-          <Card className="shadow-sm">
-            <Card.Header>
-              <h5 className="mb-0">Election Information</h5>
-            </Card.Header>
-            <ListGroup variant="flush">
-              <ListGroup.Item>
-                <small className="d-block text-muted">Results Finalized</small>
-                <div>{election.resultsFinalized ? 'Yes' : 'No'}</div>
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <small className="d-block text-muted">Candidate Count</small>
-                <div>{election.candidateCount}</div>
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <small className="d-block text-muted">Total Votes</small>
-                <div>{election.totalVotes}</div>
-              </ListGroup.Item>
-            </ListGroup>
-          </Card>
+
+          {(hasElectionEnded(election) || election.resultsFinalized) && (
+            <Button as={Link} to={`/elections/${election.id}/results`} variant="outline-primary" className="w-100 mt-3">
+              View Results
+            </Button>
+          )}
         </Col>
       </Row>
     </Container>

@@ -84,17 +84,14 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       });
 
       if (!response.ok) {
-        // Get the error message from the response
         const errorText = await response.text();
         let errorMessage;
-        if (response.status === 404) {
-          errorMessage = `No hay votantes registrados para la provincia ${selectedProvince}.`;
-        } else if (errorText.includes('No se encontraron votantes')) {
+        if (response.status === 404 || errorText.includes('No se encontraron votantes')) {
           errorMessage = `No hay votantes registrados para la provincia ${selectedProvince}.`;
         } else {
           errorMessage = `Error al obtener votantes: ${response.statusText}`;
         }
-        
+
         setGroupStatus(errorMessage);
         setHasVoters(false);
         setGroupLoading(false);
@@ -108,6 +105,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         setGroupLoading(false);
         return;
       }
+
       const votersToProcess = data.voters;
       setGroupStatus(`Votantes encontrados: ${votersToProcess.length}. Iniciando asignación...`);
       setHasVoters(true);
@@ -154,6 +152,7 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
         summaryMessage += " Detalles de fallos: " + failedAssignments.map(f => `${f.voter}: ${f.error}`).join("; ");
         console.error("Fallos en asignación grupal:", failedAssignments);
       }
+
       setGroupStatus(summaryMessage);
     } catch (error) {
       console.error('Error en handleGroupAssign:', error);

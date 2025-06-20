@@ -202,5 +202,47 @@ export const adminService = {
     localStorage.removeItem('admin_username');
     localStorage.removeItem('admin_permissions');
     localStorage.removeItem('admin_wallet');
+  },
+
+  /**
+   * Actualizar la dirección de la billetera del administrador
+   * @param {string} walletAddress - La nueva dirección de la billetera
+   * @returns {Promise<Object>} Resultado de la operación
+   */
+  updateWalletAddress: async (walletAddress) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        return { success: false, error: 'No hay sesión de administrador' };
+      }
+
+      const response = await fetch(
+        `/api/admin/profile`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': token
+          },
+          body: JSON.stringify({ walletAddress })
+        }
+      );
+
+      const data = await response.json();
+      if (!data.success) {
+        return { success: false, error: data.message || 'Error al actualizar la billetera' };
+      }
+
+      // Actualizar la dirección en localStorage también
+      localStorage.setItem('admin_wallet', walletAddress);
+
+      return { success: true, admin: data.admin };
+    } catch (error) {
+      console.error('Error al actualizar la billetera del administrador:', error);
+      return {
+        success: false,
+        error: error.message || 'Error desconocido al actualizar la billetera'
+      };
+    }
   }
 };

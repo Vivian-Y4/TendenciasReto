@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthContext from '../../context/AuthContext';
 import { formatTimestamp, isElectionActive, hasElectionEnded } from '../../utils/contractUtils';
+import { ethers } from 'ethers';
 
 const ElectionList = () => {
   const { t } = useTranslation();
@@ -16,54 +17,74 @@ const ElectionList = () => {
     fetchElections();
   }, [contract]);
 
+  const fetchElectionsFromContract = async () => {
+    let totalElections = 0;
+    if (typeof contract.electionCount === 'function') {
+      const count = await contract.electionCount();
+      totalElections = count.toNumber();
+    } else if (typeof contract.getElectionsCount === 'function') {
+      const count = await contract.getElectionsCount();
+      totalElections = count.toNumber();
+    } else {
+      throw new Error('El contrato no expone un método de conteo de elecciones reconocido.');
+    }
+
+    const electionPromises = [];
+    for (let i = 0; i < totalElections; i++) {
+      electionPromises.push(contract.elections(i).catch(() => null));
+    }
+
+    const resolved = (await Promise.all(electionPromises)).filter(Boolean);
+
+    return resolved.map((election, index) => ({
+      id: index + 1,
+      title: election.title,
+      description: election.description ?? '',
+      startTime: election.startTime?.toNumber ? election.startTime.toNumber() : 0,
+      endTime: election.endTime?.toNumber ? election.endTime.toNumber() : 0,
+      candidateCount: election.candidateCount?.toNumber ? election.candidateCount.toNumber() : 0,
+      totalVotes: election.totalVotes?.toNumber ? election.totalVotes.toNumber() : 0,
+      isActive: election.isActive ?? isElectionActive(election)
+    }));
+  };
+
   const fetchElections = async () => {
+    if (!contract) {
+      setError('El contrato no está disponible. Por favor, conecta tu billetera primero.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('auth_token');
-      const requestHeaders = { 'Content-Type': 'application/json' };
-      if (token) {
-        requestHeaders['Authorization'] = `Bearer ${token}`;
-      }
-      
-      console.log('Fetching elections from:', `${process.env.REACT_APP_API_URL}/api/elections`);
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/elections`, {
-        method: 'GET',
-        headers: requestHeaders
-      });
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-      
-      if (!response.ok || !data.success) {
-        // Try to get more specific error from backend if available
-        const errorMsg = data.message || (data.error && data.error.message) || 'Failed to fetch elections';
-        throw new Error(errorMsg);
-      }
-      
-      // Adjust according to backend response structure, assuming it's in data.data now
-      if (data.data && data.data.length === 0) {
-        setElections([]);
-        setError('No elections available at the moment.');
-      } else if (data.data) {
-        setElections(data.data);
-      } else {
-        // Fallback if data.data is not present but data.elections might be (old structure)
-        if (data.elections && data.elections.length === 0) {
-            setElections([]);
-            setError('No elections available at the moment (fallback check).');
-        } else if (data.elections) {
-            console.warn("Using fallback data.elections, backend should be updated to use data.data");
-            setElections(data.elections);
-        } else {
-            setElections([]);
-            setError('Election data is not in the expected format.');
+      let backendElections = [];
+      try {
+        const token = localStorage.getItem('auth_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const apiUrl = `${process.env.REACT_APP_API_URL}/api/elections`;
+        const response = await fetch(apiUrl, { method: 'GET', headers });
+        const data = await response.json();
+
+        if (response.ok && data.success && Array.isArray(data.data)) {
+          backendElections = data.data;
         }
+      } catch (apiErr) {
+        console.warn('Fallo al obtener elecciones vía backend, se usará fallback al contrato:', apiErr.message);
       }
-    } catch (error) {
-      console.error('Error fetching elections:', error);
-      setError('An error occurred while loading elections. Please try again later.');
+
+      if (backendElections.length === 0) {
+        const contractElections = await fetchElectionsFromContract();
+        setElections(contractElections);
+      } else {
+        setElections(backendElections);
+      }
+    } catch (err) {
+      console.error('Error al cargar las elecciones:', err);
+      setError('Ocurrió un error al cargar las elecciones. Revisa la consola para más detalles.');
     } finally {
       setLoading(false);
     }
@@ -122,7 +143,7 @@ const ElectionList = () => {
             <Card className="h-100 shadow-sm">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                <Card.Title>{election.title || 'Untitled Election'}</Card.Title>
+                  <Card.Title>{election.title || 'Untitled Election'}</Card.Title>
                   {getStatusBadge({ startTime: election.startDate, endTime: election.endDate, status: election.status })}
                 </div>
                 <Card.Text>{election.description || 'No description available.'}</Card.Text>
@@ -138,7 +159,6 @@ const ElectionList = () => {
               <Card.Footer className="bg-white">
                 <Button 
                   as={Link} 
-                  // Use election._id for MongoDB documents, election.id for contract-based if mixed
                   to={`/elections/${election._id || election.id}`}
                   variant="outline-primary" 
                   className="w-100"

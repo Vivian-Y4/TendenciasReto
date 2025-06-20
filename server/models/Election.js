@@ -80,7 +80,12 @@ const eligibilityRequirementsSchema = new Schema({
  * Esquema principal para elecciones
  */
 const electionSchema = new mongoose.Schema({
-  // Información básica
+  contractElectionId: {
+    type: String,
+    unique: true,
+    sparse: true, // Permite valores nulos sin violar la unicidad
+    index: true
+  },
   title: {
     type: String,
     required: true,
@@ -91,19 +96,19 @@ const electionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  level: { // Added as per prompt example and frontend needs
+  electoralLevel: {
     type: String,
-    required: [true, 'El nivel de la elección es requerido'],
-    enum: ['presidencial', 'senatorial', 'diputados', 'municipal'],
-    trim: true
+    required: [true, 'El nivel electoral es obligatorio.'],
+    trim: true,
+    enum: ['Presidencial', 'Congresual', 'Municipal']
   },
-  province: { // New field
+  province: {
     type: String,
-    trim: true
-  },
-  municipality: { // New field
-    type: String,
-    trim: true
+    trim: true,
+    // Es requerido condicionalmente, pero la lógica se maneja en el controlador
+    required: function() {
+      return this.electoralLevel === 'Congresual' || this.electoralLevel === 'Municipal';
+    }
   },
   
   // Fechas
@@ -138,6 +143,16 @@ const electionSchema = new mongoose.Schema({
     ref: 'ElectionSettings'
   },
   categories: [electionCategorySchema],
+
+  // Candidatos
+  candidates: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    // Podríamos añadir más detalles del candidato aquí en el futuro
+  }],
   
   // Votantes autorizados
   allowedVoters: [{

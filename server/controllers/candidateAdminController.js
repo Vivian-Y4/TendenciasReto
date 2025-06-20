@@ -492,18 +492,17 @@ const deleteCandidate = async (req, res, next) => {
 
 /**
  * @desc    Reordenar candidatos
- * @route   PATCH /api/admin/elections/:electionId/candidates/reorder
+ * @route   POST /api/admin/elections/:electionId/candidates/reorder
  * @access  Privado (Admin)
  */
 const reorderCandidates = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
     const { electionId } = req.params;
     const { orderUpdates } = req.body;
 
-    // Validar elección
+    // Verificar elección
     const election = await Election.findById(electionId).session(session);
     if (!election) {
       return next(new AppError('Elección no encontrada', 404));

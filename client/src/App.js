@@ -137,76 +137,47 @@ function App() {
   }, [logout]); // Added logout to dependency array if it's used inside
 
   const handleLoginSuccess = useCallback(async (address, web3Provider, web3Signer, cedula, provinceFromIdLogin) => {
+    if (!provider || !signer) {
+      toast.error("Error: El proveedor de Web3 o el firmante no están disponibles.");
+      return;
+    }
     setLoading(true);
-    setProvider(web3Provider);
-    setSigner(web3Signer);
-    setUserAddress(address);
 
     try {
-      // 1. Fetch nonce
-      const nonceResponse = await fetch('/api/auth/nonce?address=' + address); // Pass address as query param
-      if (!nonceResponse.ok) {
-        const errText = await nonceResponse.text();
-        throw new Error(`Error fetching nonce: ${errText}`);
-      }
-      const nonceData = await nonceResponse.json();
-      if (!nonceData.success || !nonceData.message) {
-        throw new Error(nonceData.message || 'Failed to retrieve nonce.');
-      }
+      // Verificar la red de MetaMask
+      const network = await provider.getNetwork();
+      // El ID de la red para la red de pruebas Sepolia es 11155111.
+      const expectedNetworkId = 11155111;
 
-      // 2. Sign nonce
-      const signature = await web3Signer.signMessage(nonceData.message);
-
-      // 3. Call verify signature
-      const verifyResponse = await fetch('/api/auth/verify-signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          signature,
-          message: nonceData.message,
-          name: 'Usuario', // Or derive a name if available (e.g., from IdLogin)
-          cedula,
-          clientSelectedProvince: provinceFromIdLogin
-        }),
-      });
-
-      if (!verifyResponse.ok) {
-        const errText = await verifyResponse.text();
-        throw new Error(`Error verifying signature: ${errText}`);
-      }
-      const authData = await verifyResponse.json();
-      if (!authData.success || !authData.user) {
-        throw new Error(authData.message || 'Authentication failed.');
+      if (network.chainId !== expectedNetworkId) {
+        toast.error(`Por favor, conecta tu MetaMask a la red correcta. Se esperaba la red ${expectedNetworkId} pero estás en la ${network.chainId}.`);
+        setLoading(false);
+        return;
       }
 
-      // 4. Store auth data and set state
-      localStorage.setItem('auth_token', authData.token);
-      localStorage.setItem('user_address', authData.user.address);
-      localStorage.setItem('user_name', authData.user.name);
-      localStorage.setItem('user_province', authData.user.province);
-      localStorage.setItem('zk_voter_identifier', authData.user.voterIdentifier);
-      localStorage.setItem('is_admin', authData.user.isAdmin ? 'true' : 'false');
+      setProvider(provider);
+      setSigner(signer);
+      setUserAddress(address);
+      setUserName(address.substring(0, 6) + '...' + address.substring(address.length - 4));
 
+      // Instanciar contratos
+      const votingContract = new ethers.Contract(
+        process.env.REACT_APP_VOTING_ADDRESS,
+        VotingSystemWithTokenABI.abi,
+        signer
+      );
+      setContract(votingContract);
 
-      setIsAuthenticated(true);
-      setUserName(authData.user.name);
-      setUserProvince(authData.user.province);
-      setZkVoterIdentifier(authData.user.voterIdentifier);
-      setIsAdmin(authData.user.isAdmin);
-
-      // 5. Initialize ZK Contract
-      const zkVotingSystemAddress = process.env.REACT_APP_ZK_VOTING_SYSTEM_ADDRESS;
-      if (zkVotingSystemAddress && VotingSystemABI && VotingSystemABI.abi) {
-        const zkContract = new ethers.Contract(zkVotingSystemAddress, VotingSystemABI.abi, web3Signer);
-        setContract(zkContract); // This now sets the ZK contract
-        console.log("ZK Voting System Contract initialized:", zkContract.address);
+      if (address) {
+        setVoterIdentifier(address);
+        console.log("Voter Identifier set in context (using user address):", address);
       } else {
-        console.error("ZK Voting System address or ABI not configured!");
-        toast.error("Error: ZK Voting System not configured.");
+        // This case should ideally not happen if login was successful
+        toast.warn("No se pudo obtener la dirección del usuario para el identificador de votante.");
+        setVoterIdentifier(null);
       }
 
-      // Optional: Initialize token contract if still needed
+      // Token contract (if still needed for other parts of the app)
       if (process.env.REACT_APP_TOKEN_ADDRESS && VotingToken && VotingToken.abi) {
         const tokenContractInstance = new ethers.Contract(
           process.env.REACT_APP_TOKEN_ADDRESS,
@@ -215,16 +186,21 @@ function App() {
         );
         setTokenContract(tokenContractInstance);
       }
-
-
+  
+      // Verifica admin (using admin() from VotingSystem_WithToken)
+      const contractAdmin = await votingContract.admin(); // Call admin() getter
+      setIsAdmin(address.toLowerCase() === contractAdmin.toLowerCase());
+      setIsAuthenticated(true);
       toast.success('Sesión iniciada y wallet conectada');
       navigate('/');
 
     } catch (error) {
       toast.error(`Error en el proceso de login: ${error.message}`);
       console.error("Error in handleLoginSuccess:", error);
-      // Potentially logout or clear partial state
-      logout(); // Or a more granular cleanup
+      console.log("VOTING ADDRESS:", process.env.REACT_APP_VOTING_ADDRESS);
+      console.log("VOTING ABI used:", VotingSystemWithTokenABI.abi ? 'Loaded' : 'Not Loaded'); // Updated log
+      console.log("TOKEN ADDRESS:", process.env.REACT_APP_TOKEN_ADDRESS);
+      console.log("Signer:", signer);
     } finally {
       setLoading(false);
     }
@@ -253,6 +229,7 @@ function App() {
       isAdmin,
       // login, // login function removed, handleLoginSuccess is the primary flow
       logout,
+      connectWalletForAdmin,
       provider,
       signer,
       contract, // This will now be the ZK contract instance
