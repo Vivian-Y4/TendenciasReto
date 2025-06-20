@@ -4,7 +4,7 @@ import VotingSystemTokenArtifact from '../abis/VotingSystem_WithToken.json';
 
 // Dirección del contrato VotingSystem_WithToken desplegado
 // Esta dirección debe coincidir con la del contrato que estás usando en tu red de desarrollo (Hardhat, Ganache, etc.)
-const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Reemplazar si es necesario
+const contractAddress = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 /**
  * Obtiene una instancia del contrato VotingSystem_WithToken conectada a un signer
