@@ -51,7 +51,12 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { isAdminAuthenticated, adminPermissions, adminLogout } = useContext(AdminContext);
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
+  // Dirección del contrato ERC-20.  Soportamos ambas variables de entorno por compatibilidad.
+  const tokenAddress =
+    process.env.REACT_APP_TOKEN_ADDRESS ||
+    process.env.REACT_APP_TOKEN_CONTRACT_ADDRESS ||
+    '';
+  const [users, setUsers] = useState([]); // Se mantiene por compatibilidad futura, aunque no se usa en AssignTokens
 
   // State for Modals
   const [showCreateElectionModal, setShowCreateElectionModal] = useState(false);
@@ -312,7 +317,9 @@ const AdminDashboard = () => {
             setActiveTab('overview');
           }} />
         </Tab>
-        <Tab eventKey="assignTokens" title="Asignar Tokens"><AssignTokens users={users} /></Tab>
+        <Tab eventKey="assignTokens" title="Asignar Tokens">
+          <AssignTokens tokenAddress={tokenAddress} />
+        </Tab>
       </Tabs>
 
       {/* Create Election Modal */}

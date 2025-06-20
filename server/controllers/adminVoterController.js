@@ -5,6 +5,7 @@ const { AppError } = require('../middlewares/errorHandler');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const User = require('../models/User');
 
 /**
  * @desc    Crear un nuevo votante
@@ -375,17 +376,24 @@ const getVotersByProvince = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Province parameter is required.' });
     }
 
-    // Find voters by province, selecting only walletAddress, firstName, lastName, and province for now.
-    // Ensure that walletAddress is not null or empty.
-    const voters = await Voter.find({
+    // Find users by province, selecting only address, name, and province for now.
+    // Ensure that address is not null or empty.
+    const users = await User.find({
       province: province,
-      walletAddress: { $exists: true, $ne: null, $ne: "" }
-    })
-    .select('walletAddress firstName lastName province');
+      address: { $exists: true, $ne: null, $ne: "" }
+    }).select('address name province');
 
-    if (!voters || voters.length === 0) {
-      return res.status(404).json({ success: false, message: 'No voters found for this province with a valid wallet address.' });
+    if (!users || users.length === 0) {
+      return res.status(404).json({ success: false, message: 'No users found for this province with a valid wallet address.' });
     }
+
+    // Normalizar a la forma esperada por el frontend
+    const voters = users.map(u => ({
+      walletAddress: u.address,
+      firstName: u.name || '',
+      lastName: '',
+      province: u.province || province
+    }));
 
     res.json({ success: true, voters });
   } catch (error) {
@@ -396,14 +404,21 @@ const getVotersByProvince = async (req, res) => {
 
 const getAllVotersWithWallets = async (req, res) => {
   try {
-    const voters = await Voter.find({
-      walletAddress: { $exists: true, $ne: null, $ne: "" }
-    })
-    .select('walletAddress firstName lastName province email'); // Added email for better identification
+    const users = await User.find({
+      address: { $exists: true, $ne: null, $ne: "" }
+    }).select('address name province email');
 
-    if (!voters || voters.length === 0) {
-      return res.status(404).json({ success: false, message: 'No voters found with a valid wallet address.' });
+    if (!users || users.length === 0) {
+      return res.status(404).json({ success: false, message: 'No users found with a valid wallet address.' });
     }
+
+    const voters = users.map(u => ({
+      walletAddress: u.address,
+      firstName: u.name || '',
+      lastName: '',
+      province: u.province || null,
+      email: u.email || ''
+    }));
 
     res.json({ success: true, voters });
   } catch (error) {

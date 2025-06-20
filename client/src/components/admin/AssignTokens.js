@@ -1,9 +1,14 @@
 // client/src/components/admin/AssignTokens.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { PROVINCES } from '../../constants/provinces';
 
-const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
+// Fallback para la dirección del contrato en caso de que el padre no la envíe
+const getDefaultTokenAddress = () =>
+  process.env.REACT_APP_TOKEN_ADDRESS ||
+  process.env.REACT_APP_TOKEN_CONTRACT_ADDRESS || '';
+
+const AssignTokens = ({ tokenAddress = getDefaultTokenAddress(), onTokensAssigned }) => {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('');
@@ -14,6 +19,62 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
   const [groupStatus, setGroupStatus] = useState('');
   const [groupLoading, setGroupLoading] = useState(false);
   const [hasVoters, setHasVoters] = useState(true);
+
+  // Estados para la lista de votantes
+  const [voters, setVoters] = useState([]);
+  const [votersLoading, setVotersLoading] = useState(false);
+  const [votersError, setVotersError] = useState('');
+
+  // Obtener votantes al cargar el componente o cambiar la provincia
+  useEffect(() => {
+    const fetchVoters = async () => {
+      try {
+        setVotersLoading(true);
+        setVotersError('');
+
+        const adminToken = localStorage.getItem('adminToken');
+        if (!adminToken) {
+          setVotersError('Token de administrador no encontrado.');
+          return;
+        }
+
+        const apiUrl = process.env.REACT_APP_API_URL || '';
+        const endpoint = selectedProvince
+          ? `/api/admin/voters/by-province/${selectedProvince}`
+          : '/api/admin/voters/all-wallets';
+
+        const res = await fetch(`${apiUrl}${endpoint}`, {
+          headers: { 'x-auth-token': adminToken }
+        });
+
+        // Si el backend responde 404 significa que no hay votantes que cumplan el filtro
+        if (res.status === 404) {
+          setVoters([]);
+          setHasVoters(false);
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`Error al obtener votantes (${res.status})`);
+        }
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Error inesperado');
+
+        setVoters(data.voters || []);
+        setHasVoters((data.voters || []).length > 0);
+      } catch (err) {
+        console.error('Error fetchVoters:', err);
+        setVotersError(err.message);
+        setVoters([]);
+        setHasVoters(false);
+      } finally {
+        setVotersLoading(false);
+      }
+    };
+
+    fetchVoters();
+  }, [selectedProvince]);
 
   const handleAssign = async () => {
     setStatus('');
@@ -32,11 +93,20 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const tokenAbi = [
-        "function transfer(address to, uint256 amount) public returns (bool)"
+        "function transfer(address to, uint256 amount) public returns (bool)",
+        "function decimals() view returns (uint8)"
       ];
 
       const contract = new ethers.Contract(tokenAddress, tokenAbi, signer);
-      const tx = await contract.transfer(recipient, ethers.utils.parseUnits(amount, 18));
+      // Detectar los decimales del token para calcular la cantidad correcta
+      let decimals = 18;
+      try {
+        if (typeof contract.decimals === 'function') {
+          decimals = await contract.decimals();
+        }
+      } catch {}
+      const parsedAmount = ethers.utils.parseUnits(amount, decimals);
+      const tx = await contract.transfer(recipient, parsedAmount);
       await tx.wait();
 
       setStatus('¡Tokens asignados correctamente!');
@@ -119,17 +189,30 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
       await window.ethereum.request({ method: 'eth_requestAccounts' });
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
-      const tokenAbi = ["function transfer(address to, uint256 amount) public returns (bool)"];
+      const tokenAbi = [
+        "function transfer(address to, uint256 amount) public returns (bool)",
+        "function decimals() view returns (uint8)"
+      ];
       const contract = new ethers.Contract(tokenAddress, tokenAbi, signer);
+
+      let decimals = 18;
+      try { if (typeof contract.decimals === 'function') { decimals = await contract.decimals(); } } catch {}
+      const parsedGroupAmount = ethers.utils.parseUnits(groupAmount, decimals);
 
       let successCount = 0;
       let failCount = 0;
       const failedAssignments = [];
-      const parsedGroupAmount = ethers.utils.parseUnits(groupAmount, 18);
+
+      // Obtiene el nonce inicial para esta cuenta (incluyendo tx pendientes)
+      let currentNonce = await provider.getTransactionCount(await signer.getAddress(), 'pending');
 
       for (const voter of votersToProcess) {
         try {
-          const tx = await contract.transfer(voter.walletAddress, parsedGroupAmount);
+          const tx = await contract.transfer(
+            voter.walletAddress,
+            parsedGroupAmount,
+            { nonce: currentNonce++ } // usa nonce único e incrementa
+          );
           await tx.wait();
           successCount++;
         } catch (err) {
@@ -157,6 +240,68 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
     } catch (error) {
       console.error('Error en handleGroupAssign:', error);
       setGroupStatus('Error durante la asignación grupal: ' + error.message);
+    } finally {
+      setGroupLoading(false);
+    }
+  };
+
+  // Asignar tokens a todos los votantes actualmente listados
+  const handleAssignAll = async () => {
+    setGroupStatus('');
+
+    if (!tokenAddress) {
+      setGroupStatus('Error: La dirección del contrato de token no está configurada.');
+      return;
+    }
+
+    if (voters.length === 0) {
+      setGroupStatus('No hay votantes para asignar.');
+      return;
+    }
+
+    try {
+      setGroupLoading(true);
+
+      if (!window.ethereum) throw new Error('MetaMask no detectado');
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const tokenAbi = [
+        'function transfer(address to, uint256 amount) public returns (bool)',
+        "function decimals() view returns (uint8)"
+      ];
+      const contract = new ethers.Contract(tokenAddress, tokenAbi, signer);
+
+      let decimals = 18;
+      try { if (typeof contract.decimals === 'function') { decimals = await contract.decimals(); } } catch {}
+      const parsedAmount = ethers.utils.parseUnits(groupAmount, decimals);
+
+      let success = 0;
+      let fail = 0;
+
+      // Obtiene el nonce inicial para esta cuenta (incluyendo tx pendientes)
+      let currentNonce = await provider.getTransactionCount(await signer.getAddress(), 'pending');
+
+      for (const voter of voters) {
+        try {
+          const tx = await contract.transfer(
+            voter.walletAddress,
+            parsedAmount,
+            { nonce: currentNonce++ }
+          );
+          await tx.wait();
+          success++;
+        } catch (err) {
+          console.error('Error asignando a', voter.walletAddress, err);
+          fail++;
+        }
+      }
+
+      setGroupStatus(`Asignación completada. Éxitos: ${success}, Fallos: ${fail}.`);
+    } catch (err) {
+      console.error('Error handleAssignAll:', err);
+      setGroupStatus('Error durante la asignación global: ' + err.message);
     } finally {
       setGroupLoading(false);
     }
@@ -220,6 +365,54 @@ const AssignTokens = ({ tokenAddress, onTokensAssigned }) => {
           </button>
         </div>
         {groupStatus && <div className="text-info">{groupStatus}</div>}
+      </div>
+
+      {/* Lista de votantes */}
+      <hr />
+      <h6>Votantes encontrados: {voters.length}</h6>
+      {votersLoading && <div>Cargando votantes...</div>}
+      {votersError && <div className="text-danger">{votersError}</div>}
+      {!votersLoading && !votersError && voters.length > 0 && (
+        <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          <table className="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nombre</th>
+                <th>Wallet</th>
+                <th>Provincia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {voters.map((v, idx) => (
+                <tr key={v.walletAddress}>
+                  <td>{idx + 1}</td>
+                  <td>{`${v.firstName || ''} ${v.lastName || ''}`}</td>
+                  <td style={{ fontSize: '0.75rem' }}>{v.walletAddress}</td>
+                  <td>{v.province || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Botón para asignar a todos los listados */}
+      <div className="mt-2 d-flex">
+        <input
+          type="number"
+          className="form-control me-2"
+          placeholder="Cantidad por votante"
+          value={groupAmount}
+          onChange={e => setGroupAmount(e.target.value)}
+        />
+        <button
+          className="btn btn-danger"
+          onClick={handleAssignAll}
+          disabled={groupLoading || voters.length === 0 || !groupAmount}
+        >
+          {groupLoading ? 'Asignando...' : 'Asignar a Todos'}
+        </button>
       </div>
     </>
   );
