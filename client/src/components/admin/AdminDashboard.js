@@ -22,7 +22,7 @@ import { toast } from "react-toastify";
 import StatsDashboard from "./stats/StatsDashboard";
 import axios from "axios";
 import AssignTokens from './AssignTokens';
-import ManageCandidates from './ManageCandidates';
+import ManageElections from './ManageElections';
 import CreateElection from './CreateElection';
 import { PROVINCES } from '../../constants/provinces';
 import { setupWeb3Provider } from "../../utils/web3Utils";
@@ -302,13 +302,10 @@ const AdminDashboard = () => {
           </Card>
         </Tab>
 
-        <Tab eventKey="candidates" title="Gestionar Candidatos">
-          <ManageCandidates
-            isElectionActive={isElectionActive}
-            hasElectionEnded={hasElectionEnded}
-
-          />
+        <Tab eventKey="elections" title="Gestionar Elecciones">
+          <ManageElections />
         </Tab>
+
         <Tab eventKey="stats" title="Estadísticas"><StatsDashboard /></Tab>
         <Tab eventKey="createElection" title="Crear Elección">
           <CreateElection onElectionCreated={() => {

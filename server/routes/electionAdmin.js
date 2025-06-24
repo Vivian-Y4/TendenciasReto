@@ -47,6 +47,13 @@ router.post('/contract/verifier', adminAuth, electionAdminController.setVerifier
 router.post('/:electionId/merkle-root', adminAuth, electionAdminController.setElectionMerkleRoot);
 
 /**
+ * @route   POST /api/admin/elections/:electionId/assign-voters
+ * @desc    Asignar votantes a una elección
+ * @access  Privado (Admin)
+ */
+router.post('/:electionId/assign-voters', adminAuth, electionAdminController.assignVoterToElection);
+
+/**
  * @route   GET /api/admin/elections/:electionId/candidates
  * @desc    Obtener candidatos por elección
  * @access  Privado (Admin)

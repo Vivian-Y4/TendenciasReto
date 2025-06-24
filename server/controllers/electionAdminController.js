@@ -96,7 +96,7 @@ const handleContractError = (error, contract, next, transactionHash = null) => {
 const createElection = async (req, res, next) => {
   console.log('Received data for new election in backend:', JSON.stringify(req.body, null, 2));
   const {
-    id, // ID desde la blockchain
+    blockchainId: id, // Leer 'blockchainId' de la petición y asignarlo a la variable 'id'
     title,
     description,
     startDate,
@@ -125,52 +125,37 @@ const createElection = async (req, res, next) => {
 
   try {
     // Verificar si la elección ya fue registrada para evitar duplicados
-    const existingElection = await Election.findOne({ contractElectionId: id }).session(session);
+    const existingElection = await Election.findOne({ blockchainId: id.toString() }).session(session);
     if (existingElection) {
-      // Si ya existe, simplemente retornamos éxito para no interrumpir el flujo del frontend
       await session.abortTransaction();
+      console.log(`[ElectionAdminCtrl] Election with blockchainId ${id} already exists. Skipping creation.`);
       return res.status(200).json({ success: true, message: 'La elección ya estaba registrada.', data: existingElection });
     }
 
-    // 1. Crear la categoría electoral si es necesario
-    let category = await ElectoralCategory.findOne({ level: electoralLevel, province: province || null }).session(session);
-    if (!category) {
-      category = new ElectoralCategory({ level: electoralLevel, province: province || null });
-      await category.save({ session });
-    }
-
-    // 2. Crear la elección en la base de datos con el ID de la blockchain
+    // Crear la elección en la base de datos con el ID de la blockchain
     const newElection = new Election({
-      contractElectionId: id.toString(),
+      blockchainId: id.toString(),
       title,
       description,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       electoralLevel,
-      province: electoralLevel === 'Presidencial' ? null : province,
-      status: 'active', // Asumimos que si se registra desde el front, ya está activa en el contrato
+      province: electoralLevel === 'Presidencial' ? undefined : province,
+      status: 'active', // Si se registra desde el front, ya está activa en el contrato
+      candidates: candidates && Array.isArray(candidates) ? candidates.map(name => ({ name })) : [],
+      createdBy: req.user._id // CORRECCIÓN: Usar _id que es el estándar de Mongoose/MongoDB
     });
 
-    // Map candidate names to the required schema format
-    if (candidates && Array.isArray(candidates)) {
-      newElection.candidates = candidates.map(name => ({ name: name }));
-    }
+    console.log('[ElectionAdminCtrl] Attempting to save election object:', JSON.stringify(newElection, null, 2));
 
     await newElection.save({ session });
 
-    // 3. Log de actividad
-    await ActivityLog.logActivity({
-      user: { id: req.user.id, username: req.user.username, name: req.user.name, model: 'Admin' },
-      action: 'election_registered_from_blockchain',
-      resource: { type: 'Election', id: newElection._id.toString(), name: newElection.title },
-      details: { contractId: id, startDate: newElection.startDate, endDate: newElection.endDate, level: category.level }
-    });
-
     await session.commitTransaction();
-    res.status(201).json({ success: true, data: newElection, debug_received_candidates: req.body.candidates || 'Not Received' });
+    res.status(201).json({ success: true, data: newElection });
 
   } catch (error) {
     await session.abortTransaction();
+    console.error("[ElectionAdminCtrl] Error saving election:", error);
     next(new AppError('Error al registrar la elección en el backend: ' + error.message, 500));
   } finally {
     session.endSession();
@@ -365,7 +350,7 @@ const getElections = async (req, res, next) => {
       page = 1, limit = 10, status, search, startAfter, endBefore, isPublic, sortBy = 'createdAt', sortOrder = 'desc'
     } = req.query;
     const filter = {};
-    if (status) filter.status = status;
+    // if (status) filter.status = status; // Se elimina el filtro de estado para obtener todas las elecciones
     if (isPublic === 'true') filter.isPublic = true;
     if (isPublic === 'false') filter.isPublic = false;
     if (startAfter) filter.startDate = { $gte: new Date(startAfter) };
@@ -387,10 +372,8 @@ const getElections = async (req, res, next) => {
       .limit(parseInt(limit));
     const total = await Election.countDocuments(filter);
     // Simplified enrichment for brevity for this phase
-    const enrichedElections = elections.map(e => ({ ...e.toObject(), candidateCount: 0, voterCount: 0, currentStatus: e.status }));
-
         res.status(200).json({
-      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), elections: enrichedElections
+      success: true, count: elections.length, total, page: parseInt(page), pages: Math.ceil(total / limit), elections: elections
     });
   } catch (error) {
     next(new AppError(`Error al obtener elecciones (MongoDB): ${error.message}`, 500));
@@ -527,23 +510,49 @@ const updateElection = async (req, res, next) => {
     next(new AppError('Error al actualizar la elección.', 500));
   }
 };
-// remain heavily MongoDB-dependent and are more complex than simple contract interactions.
-// They are not updated for direct contract calls in this pass to keep focus.
 
-module.exports = {
-  createElection,
-  addCandidateToElection,
-  endElectionEndpoint,
-  finalizeResultsEndpoint,
-  setVerifierAddress,
-  setElectionMerkleRoot,
-  getElections,
-  getElectionById,
-  updateElection,
-  // updateElectionStatus,
-  // deployElectionToBlockchain,
-  // syncElectionResults,
-  // publishElectionResults
+
+/**
+ * @desc    Asignar un votante a una elección
+ * @route   POST /api/admin/elections/:electionId/assign-voters
+ * @access  Privado (Admin)
+ */
+const assignVoterToElection = async (req, res, next) => {
+  const { electionId } = req.params;
+  const { voterId } = req.body;
+
+  if (!voterId) {
+    return next(new AppError('El ID del votante es obligatorio.', 400));
+  }
+
+  try {
+    const election = await Election.findById(electionId);
+    if (!election) {
+      return next(new AppError('Elección no encontrada.', 404));
+    }
+
+    const voter = await Voter.findById(voterId);
+    if (!voter) {
+      return next(new AppError('Votante no encontrado.', 404));
+    }
+
+    // Check if the voter is already assigned
+    if (election.voters.includes(voterId)) {
+      return next(new AppError('El votante ya está asignado a esta elección.', 400));
+    }
+
+    election.voters.push(voterId);
+    await election.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Votante asignado a la elección correctamente.',
+      data: election,
+    });
+  } catch (error) {
+    console.error('Error assigning voter to election:', error);
+    next(new AppError('Error en el servidor al asignar el votante.', 500));
+  }
 };
 
 /**
@@ -672,6 +681,7 @@ module.exports = {
   getElections,
   getElectionById,
   updateElection,
+  assignVoterToElection,
   // updateElectionStatus,
   // deployElectionToBlockchain,
   // syncElectionResults,

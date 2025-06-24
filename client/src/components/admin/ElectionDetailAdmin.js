@@ -277,15 +277,16 @@ const ElectionDetailAdmin = () => {
             <div className="d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Información General</h5>
               {adminPermissions.canEditElection && !hasElectionEnded(election) && (
-                <Button
-                  as={Link}
-                  to={`/admin/elections/${electionId}/edit`}
-                  variant="outline-primary"
-                  size="sm"
-                >
-                  <i className="fas fa-edit me-2"></i>
-                  Editar
-                </Button>
+                <div>
+                  <Link to={`/admin/edit-election/${electionId}`} className="btn btn-primary me-2">
+                    <i className="fas fa-edit me-2"></i>
+                    Editar Elección
+                  </Link>
+                  <Link to={`/admin/elections/${electionId}/assign-voters`} className="btn btn-success">
+                    <i className="fas fa-users-cog me-2"></i>
+                    Asignar Votantes
+                  </Link>
+                </div>
               )}
             </div>
           </Card.Header>

@@ -183,7 +183,7 @@ const CreateElection = ({ onElectionCreated }) => {
       if (!token) throw new Error('No se encontró el token de autenticación.');
 
       const electionDataForBackend = {
-        id: electionId.toString(),
+        blockchainId: electionId.toString(),
         title: formData.title,
         description: formData.description,
         startDate: new Date(`${formData.startDate}T${formData.startTime}`),

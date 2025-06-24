@@ -25,6 +25,7 @@ import VotingInterface from './components/voting/VotingInterface';
 import ElectionResults from './components/elections/ElectionResults';
 import Footer from './components/layout/Footer';
 import ManageCandidates from './components/admin/ManageCandidates';
+import AssignVoters from './components/admin/AssignVoters';
 import Configuration from './components/admin/Configuration';
 import Activity from './components/admin/Activity';
 import ResultsPanel from './components/elections/ResultsPanel';
@@ -313,6 +314,7 @@ function App() {
               <Route path="/admin/create-election" element={<AdminRoute element={<CreateElection />} />} />
               <Route path="/admin/edit-election/:electionId" element={<AdminRoute element={<EditElection />} />} />
               <Route path="/admin/elections/:electionId" element={<AdminRoute element={<ElectionDetailAdmin />} />} />
+              <Route path="/admin/elections/:electionId/assign-voters" element={<AdminRoute element={<AssignVoters />} />} />
               <Route path="/admin/election/:electionId/voters" element={<AdminRoute element={<ManageVoters />} />} />
               <Route path="/admin/election/:electionId/statistics" element={<AdminRoute element={<ElectionStatistics />} />} />
               <Route path="/admin/configuration" element={<AdminRoute element={<Configuration />} />} />

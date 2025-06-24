@@ -1,6 +1,7 @@
 const { ethers } = require('ethers'); // Still needed for BigNumber, utils if used elsewhere
 const fs = require('fs'); // Using synchronous fs
 const path = require('path');
+const mongoose = require('mongoose');
 const { AppError } = require('../middlewares/errorHandler');
 const Election = require('../models/Election'); // Import Election model
 const blockchainService = require('../utils/blockchainService'); // Import blockchainService
@@ -99,52 +100,38 @@ const getElections = async (req, res, next) => {
 };
 
 /**
- * @desc    Obtener una elección por ID desde el contrato
+ * @desc    Obtener una elección por ID desde la base de datos
  * @route   GET /api/elections/:id
  * @access  Público
  */
 const getElection = async (req, res, next) => {
   const { id } = req.params;
-  console.log(`[ElectionCtrl] getElection endpoint hit for MongoDB ID: ${id}.`);
+  console.log(`[ElectionCtrl] getElection (DB-first) endpoint hit for ID: ${id}`);
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return next(new AppError('El ID de la elección proporcionado no es válido.', 400));
+  }
 
   try {
     const election = await Election.findById(id).lean();
 
     if (!election) {
-      return next(new AppError('Elección no encontrada.', 404));
+      return next(new AppError('Elección no encontrada en la base de datos.', 404));
     }
 
-    // Format data consistently with getElections
-    const formattedElection = {
-      _id: election._id.toString(),
-      id: election.contractElectionId ? election.contractElectionId.toString() : 'N/A',
-      title: election.title,
-      description: election.description,
-      startDate: election.startDate.toISOString(),
-      endDate: election.endDate.toISOString(),
-      electoralLevel: election.electoralLevel,
-      province: election.province,
-      status: election.status,
-      candidates: Array.isArray(election.candidates) ? election.candidates.map(c => ({ 
-        id: c._id.toString(), 
-        name: c.name, 
-        votes: c.votes || 0 
-      })) : [],
-      totalVotes: election.totalVotes || 0,
-    };
+    // Log para depuración: Muestra el objeto de la elección recuperado de la BD
+    console.log('[ElectionCtrl] Election data fetched from DB:', JSON.stringify(election, null, 2));
 
     res.status(200).json({
       success: true,
-      message: 'Detalles de la elección obtenidos con éxito.',
-      data: formattedElection, // Send data under 'data' key
+      data: {
+        ...election,
+        id: election._id // Asegurar que el frontend reciba el _id como 'id' si lo necesita
+      }
     });
-
   } catch (error) {
-    console.error(`[ElectionCtrl] Error en getElection (ID: ${id}): ${error.message}`, error.stack);
-    if (error.name === 'CastError' && error.kind === 'ObjectId') {
-      return next(new AppError('ID de elección con formato inválido.', 400));
-    }
-    next(new AppError(`Error al obtener los detalles de la elección: ${error.message}`, 500));
+    console.error(`[ElectionCtrl] Error al obtener la elección de la base de datos para el ID ${id}:`, error);
+    next(new AppError('Error del servidor al buscar la elección.', 500));
   }
 };
 

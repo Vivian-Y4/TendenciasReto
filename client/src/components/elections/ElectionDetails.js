@@ -57,14 +57,16 @@ const ElectionDetails = () => {
   }, [isAuthenticated, userAddress, id]);
 
   const checkTokenBalance = useCallback(async () => {
-    if (!election?.tokenAddress || !userAddress || !signer) {
+    const VOTE_TOKEN_ADDRESS = '0x0177428D9Ed3a103Cb52708457D65E35D72aA3b3';
+
+    if (!userAddress || !signer) {
       setHasVotingToken(false);
       setIsCheckingToken(false);
       return;
     }
     setIsCheckingToken(true);
     try {
-      const tokenContract = new ethers.Contract(election.tokenAddress, VotingTokenABI.abi, signer);
+      const tokenContract = new ethers.Contract(VOTE_TOKEN_ADDRESS, VotingTokenABI.abi, signer);
       const balance = await tokenContract.balanceOf(userAddress);
       setHasVotingToken(balance.gt(0));
     } catch (err) {
@@ -74,7 +76,7 @@ const ElectionDetails = () => {
     } finally {
       setIsCheckingToken(false);
     }
-  }, [election, userAddress, signer]);
+  }, [userAddress, signer]);
 
   useEffect(() => {
     fetchElectionDetails();
@@ -83,9 +85,14 @@ const ElectionDetails = () => {
   useEffect(() => {
     if (isAuthenticated && userAddress && election) {
       checkVoterStatus();
+    }
+  }, [isAuthenticated, userAddress, election, checkVoterStatus]);
+
+  useEffect(() => {
+    if (isAuthenticated && userAddress) {
       checkTokenBalance();
     }
-  }, [isAuthenticated, userAddress, election, checkVoterStatus, checkTokenBalance]);
+  }, [isAuthenticated, userAddress, checkTokenBalance]);
 
   const handleVote = async () => {
     if (!selectedCandidateId) {
@@ -96,9 +103,18 @@ const ElectionDetails = () => {
       toast.error("Voting contract is not available. Please reconnect.");
       return;
     }
+    const numericElectionId = election.blockchainId;
+    if (!numericElectionId) {
+      toast.error('El ID de la elección en la blockchain no está disponible. No se puede votar.');
+      setLoading(false);
+      return;
+    }
+
+    console.log(`[handleVote] Calling contract.castVote with electionId: ${numericElectionId}, candidateId: ${selectedCandidateId}`);
+    
     setIsVoting(true);
     try {
-      const tx = await contract.vote(id, selectedCandidateId);
+      const tx = await contract.castVote(numericElectionId, selectedCandidateId, { gasLimit: 300000 });
       toast.info("Your vote is being submitted... Please wait for confirmation.");
       await tx.wait();
       toast.success("You have successfully voted!");
@@ -184,13 +200,13 @@ const ElectionDetails = () => {
             <ListGroup variant="flush">
               <Form>
                 {election.candidates && election.candidates.length > 0 ? (
-                  election.candidates.map((candidate) => (
-                    <ListGroup.Item key={candidate.id} action as="label" className="d-flex align-items-center">
+                  election.candidates.map((candidate, index) => (
+                    <ListGroup.Item key={candidate._id} action as="label" className="d-flex align-items-center">
                       <Form.Check 
                         type="radio" 
                         name="candidate-selection"
-                        id={`candidate-${candidate.id}`}
-                        value={candidate.id}
+                        id={`candidate-${candidate._id}`}
+                        value={index} // Usar el índice del candidato para la votación
                         onChange={(e) => setSelectedCandidateId(e.target.value)}
                         disabled={voterStatus.hasVoted || election.status !== 'active' || !hasVotingToken || isVoting}
                         className="me-3"
