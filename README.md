@@ -1,4 +1,6 @@
 # Plataforma de Voto Electrónico Basada en Blockchain
+![image](https://github.com/user-attachments/assets/d486f355-0873-4f19-a3c0-f5a1b3b76aca)
+
 
 Una plataforma segura, transparente y descentralizada para realizar elecciones electrónicas utilizando tecnología blockchain.
 
